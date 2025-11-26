@@ -13,36 +13,30 @@ class StepperDirection:
 class StepperMotor:
     """UM242 Stepper Motor Driver"""
 
-    def __init__(self, pul_pin, dir_pin, ena_pin=None, steps_per_rev=200):
-        self.pul = Pin(pul_pin, Pin.OUT)
-        self.dir = Pin(dir_pin, Pin.OUT)
-        self.ena = Pin(ena_pin, Pin.OUT) if ena_pin else None
+    def __init__(self, pul_pin_id, dir_pin_id, steps_per_rev=200):
+        """Initialize the stepper motor with given pin IDs and steps per revolution."""
+        self.pul_pin = Pin(pul_pin_id, Pin.OUT)
+        self.dir_pin = Pin(dir_pin_id, Pin.OUT)
         self.steps_per_rev = steps_per_rev
         self.current_position = 0
 
-        self.pul.value(0)
-        self.dir.value(0)
-        if self.ena:
-            self.ena.value(1)
-
-    def enable(self, enable=True):
-        """Enable or disable the motor driver."""
-        if self.ena:
-            self.ena.value(0 if enable else 1)
+        self.pul_pin.value(0)
+        self.dir_pin.value(0)
 
     def step(self, steps, delay_us=500, direction=None):
+        """Move the motor by a specific number of steps."""
         if direction is not None:
-            self.dir.value(direction)
+            self.dir_pin.value(direction)
             time.sleep_us(20)
 
-        actual_direction = self.dir.value()
+        actual_direction = self.dir_pin.value()
 
         print(f'Moving {"UP" if actual_direction == StepperDirection.UP else "DOWN"} by {steps} steps')
 
         for _ in range(steps):
-            self.pul.value(1)
+            self.pul_pin.value(1)
             time.sleep_us(10)
-            self.pul.value(0)
+            self.pul_pin.value(0)
             time.sleep_us(delay_us)
 
         self.current_position += steps if actual_direction == StepperDirection.UP else -steps
@@ -78,12 +72,13 @@ class StepperMotor:
 
 
 if __name__ == '__main__':
-    motor = StepperMotor(2, 4)
+    # Example usage of StepperMotor
+    stepper_motor = StepperMotor(2, 4)
 
-    delay_up = motor.set_rpm(100)
-    motor.step(4000, delay_up, StepperDirection.UP)
+    delay_up = stepper_motor.set_rpm(100)
+    stepper_motor.step(4000, delay_up, StepperDirection.UP)
     time.sleep(1)
 
-    delay_down = motor.set_rpm(10)
-    motor.step(4000, delay_down, StepperDirection.DOWN)
+    delay_down = stepper_motor.set_rpm(10)
+    stepper_motor.step(4000, delay_down, StepperDirection.DOWN)
     time.sleep(1)

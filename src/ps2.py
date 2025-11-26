@@ -147,3 +147,7 @@ class PS2ControllerWrapper:
         print('Initialized PS2ControllerWrapper')
 
         return controller
+
+
+if __name__ == '__main__':
+    pass

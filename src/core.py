@@ -64,3 +64,7 @@ class CentralController:
             self.motion.stop()
         else:
             print(f'Unknown PS2 command: {command}')
+
+
+if __name__ == '__main__':
+    pass
