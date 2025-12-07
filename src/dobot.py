@@ -82,12 +82,11 @@ class Dobot:
                 bound.apply_defaults()
 
                 if return_type == DobotResponse:
-                    params = []
-                    for k, v in bound.arguments.items():
-                        if k == 'self' or v is None:
-                            continue
-
-                        params.append(f'{k.removeprefix("_")}={v}' if k.startswith('_') else str(v))
+                    params = [
+                        f'{k.removeprefix("_")}={v}' if k.startswith('_') else str(v)
+                        for k, v in bound.arguments.items()
+                        if k != 'self' and v is not None
+                    ]
                     command = f'{func.__name__}({",".join(params)})'
                 elif return_type == DobotResponse2:
                     params = func(self, *args, **kwargs)
@@ -748,48 +747,16 @@ class Dobot:
         pass
 
     @send()
-    def RelPointTool(
-        self,
-        P: str,
-        offsetX: float,
-        offsetY: float,
-        offsetZ: float,
-        offsetRx: float,
-        offsetRy: float,
-        offsetRz: float,
-    ) -> DobotResponse2:
-        return f'{P},{{{offsetX},{offsetY},{offsetZ},{offsetRx},{offsetRy},{offsetRz}}}'
+    def RelPointTool(self, P: str, offset: str) -> DobotResponse:
+        pass
 
     @send()
-    def RelPointUser(
-        self,
-        P: str,
-        offsetX: float,
-        offsetY: float,
-        offsetZ: float,
-        offsetRx: float,
-        offsetRy: float,
-        offsetRz: float,
-    ) -> DobotResponse2:
-        return f'{P},{{{offsetX},{offsetY},{offsetZ},{offsetRx},{offsetRy},{offsetRz}}}'
+    def RelPointUser(self, P: str, offset: str) -> DobotResponse:
+        pass
 
     @send()
-    def RelJoint(
-        self,
-        J1: float,
-        J2: float,
-        J3: float,
-        J4: float,
-        J5: float,
-        J6: float,
-        offset1: float,
-        offset2: float,
-        offset3: float,
-        offset4: float,
-        offset5: float,
-        offset6: float,
-    ) -> DobotResponse2:
-        return f'{J1},{J2},{J3},{J4},{J5},{J6},{{{offset1},{offset2},{offset3},{offset4},{offset5},{offset6}}}'
+    def RelJoint(self, J1: float, J2: float, J3: float, J4: float, J5: float, J6: float, offset: str) -> DobotResponse:
+        pass
 
     @send()
     def GetCurrentCommandID(self) -> DobotResponse:
@@ -844,8 +811,8 @@ class Dobot:
         pass
 
     @send()
-    def ForceDriveMode(self, x: int, y: int, z: int, rx: int, ry: int, rz: int, user: int = 0) -> DobotResponse2:
-        return f'{{{x},{y},{z},{rx},{ry},{rz}}},user={user}'
+    def ForceDriveMode(self, control: str, _user: int = 0) -> DobotResponse:
+        pass
 
     @send()
     def ForceDriveSpped(self, speed: int) -> DobotResponse:
@@ -853,30 +820,13 @@ class Dobot:
 
     @send()
     def FCForceMode(
-        self,
-        x: int,
-        y: int,
-        z: int,
-        rx: int,
-        ry: int,
-        rz: int,
-        fx: int,
-        fy: int,
-        fz: int,
-        frx: int,
-        fry: int,
-        frz: int,
-        reference: int = 0,
-        user: int = 0,
-        tool: int = 0,
-    ) -> DobotResponse2:
-        return f'{{{x},{y},{z},{rx},{ry},{rz}}},{{{fx},{fy},{fz},{frx},{fry},{frz}}},reference={reference},user={user},tool={tool}'
+        self, control: str, force: str, _reference: int = 0, _user: int = 0, _tool: int = 0
+    ) -> DobotResponse:
+        pass
 
     @send()
-    def FCSetDeviation(
-        self, x: int = 100, y: int = 100, z: int = 100, rx: int = 36, ry: int = 36, rz: int = 36, controltype: int = 0
-    ) -> DobotResponse2:
-        return f'{{{x},{y},{z},{rx},{ry},{rz}}},{controltype}'
+    def FCSetDeviation(self, deviation: str, controltype: int = 0) -> DobotResponse:
+        pass
 
     @send()
     def FCSetForceLimit(
