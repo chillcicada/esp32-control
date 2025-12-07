@@ -2,7 +2,9 @@ from functools import wraps
 from inspect import signature
 from socket import AF_INET, SOCK_DGRAM, socket
 
+# Use type aliases for better readability
 type DobotResponse = tuple[int, list, str]
+type DobotResponse2 = tuple[int, list, str]
 
 
 class DobotErrorCode:
@@ -44,20 +46,32 @@ class Dobot:
                 self.error('Not connected to Dobot.')
                 raise ConnectionError('Not connected to Dobot.')
 
-            try:
-                bound = signature(func).bind(self, *args, **kwargs)
-                bound.apply_defaults()
+            sign = signature(func)
+            return_type = signature(func).return_annotation
 
-                params = [str(v) for v in bound.arguments.values()[1:] if v is not None]
+            bound = sign.bind(self, *args, **kwargs)
+            bound.apply_defaults()
+
+            if return_type == DobotResponse:
+                # params = [str(v) for v in bound.arguments.values()[1:] if v is not None]
+                params = []
+                for k, v in bound.arguments.items():
+                    if k == 'self' or v is None:
+                        continue
+
+                    params.append(f'{k.removeprefix("_")}={v}' if k.startswith('_') else str(v))
                 command = f'{func.__name__}({",".join(params)})'
+            elif return_type == DobotResponse2:
+                params = func(self, *args, **kwargs)
+                command = f'{func.__name__}({params})'
+            else:
+                self.error(f'Invalid return type for {func.__name__}: {return_type}')
+                raise TypeError(f'Invalid return type for {func.__name__}: {return_type}')
 
-                self.socket.sendall(command.encode() + b'\n')
-                self.debug(f'Sent command: {command}')
+            self.socket.sendall(command.encode() + b'\n')
+            self.debug(f'Sent command: {command}')
 
-                return self.parse(self.socket.recv(1024).decode())
-
-            except Exception as e:
-                self.error(f'Sending command failed: {e}')
+            return self.parse(self.socket.recv(1024).decode())
 
         return sender
 
@@ -120,7 +134,14 @@ class Dobot:
         pass
 
     @send
-    def EnableRobot(self, *args) -> DobotResponse:
+    def EnableRobot(
+        self,
+        load: float = None,
+        centerX: float = None,
+        centerY: float = None,
+        centerZ: float = None,
+        isCheck: int = None,
+    ) -> DobotResponse:
         pass
 
     @send
@@ -196,7 +217,7 @@ class Dobot:
         pass
 
     @send
-    def SetPayload(self, *args) -> DobotResponse:
+    def SetPayload(self, load_or_name: str | float, x: float = None, y: float = None, z: float = None) -> DobotResponse:
         pass
 
     @send
@@ -261,7 +282,7 @@ class Dobot:
 
     @send
     def PositiveKin(
-        self, J1: float, J2: float, J3: float, J4: float, J5: float, J6: float, user: int = 0, tool: int = 0
+        self, J1: float, J2: float, J3: float, J4: float, J5: float, J6: float, _user: int = 0, _tool: int = 0
     ) -> DobotResponse:
         pass
 
@@ -274,10 +295,10 @@ class Dobot:
         Rx: float,
         Ry: float,
         Rz: float,
-        useJointNear: int = 0,
-        JointNear: str = '',
-        user: int = 0,
-        tool: int = 0,
+        _useJointNear: int = 0,
+        _JointNear: str = '',
+        _user: int = 0,
+        _tool: int = 0,
     ) -> DobotResponse:
         pass
 
@@ -286,7 +307,7 @@ class Dobot:
         pass
 
     @send
-    def GetPose(self, user: int = 0, tool: int = 0) -> DobotResponse:
+    def GetPose(self, _user: int = 0, _tool: int = 0) -> DobotResponse:
         pass
 
     @send
@@ -312,6 +333,10 @@ class Dobot:
     # endregion
     # ---------
     # region io
+
+    @send
+    def DO(self, index: int, status: int, time: int = None) -> DobotResponse:
+        pass
 
     @send
     def DOInstant(self, index: int, status: int) -> DobotResponse:
@@ -373,13 +398,25 @@ class Dobot:
     def ToolAI(self, index: int) -> DobotResponse:
         pass
 
-    # TODO
+    @send
+    def SetTool485(self, baud: int, parity: str = 'N', stopbit: int = 1, identify: int = None) -> DobotResponse:
+        pass
+
+    @send
+    def SetToolPower(self, status: int, identify: int = None) -> DobotResponse:
+        pass
+
+    @send
+    def SetToolMode(self, mode: int, type: int, identify: int = None) -> DobotResponse:
+        pass
 
     # endregion
     # -------------
     # region modbus
 
-    # TODO
+    @send
+    def ModbusCreate(self, ip: str, port: int, slave_id: int, isRTU: int = None) -> DobotResponse:
+        pass
 
     @send
     def ModbusRTUCreate(
@@ -460,6 +497,91 @@ class Dobot:
     # region movement
 
     @send
+    def MovJ(
+        self,
+        pose: str,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _cp: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
+    def MovL(
+        self,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _speed: str = None,
+        _cp: int = None,
+        _r: str = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
+    def MovLIO(
+        self,
+        pose: str,
+        io: str,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _speed: int = None,
+        _cp: int = None,
+        _r: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
+    def MovJIO(
+        self,
+        pose: str,
+        io: str,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _cp: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
+    def Arc(
+        self,
+        pose1: str,
+        pose2: str,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _speed: int = None,
+        _cp: int = None,
+        _r: int = None,
+        ori_mode: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
+    def Circle(
+        self,
+        pose1: str,
+        pose2: str,
+        count: int,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _speed: int = None,
+        _cp: int = None,
+        _r: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
     def ServoJ(
         self,
         J1: float,
@@ -490,20 +612,152 @@ class Dobot:
         pass
 
     @send
+    def MoveJog(self, axisID: str = None, _coordType: int = 0, _user: int = 0, _tool: int = 0) -> DobotResponse:
+        pass
+
+    @send
+    def RunTo(
+        self,
+        pose: str,
+        moveType: int,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
     def GetStartPose(self, traceName: str) -> DobotResponse:
         pass
 
     @send
-    def RelPointTool(
-        self, P: str, offsetX: float, offsetY: float, offsetZ: float, offsetRx: float, offsetRy: float, offsetRz: float
+    def StartPath(
+        self,
+        traceName: str,
+        isConst: int,
+        multi: float,
+        _sample: int = 50,
+        _freq: float = 0.2,
+        _user: int = 0,
+        _tool: int = 0,
     ) -> DobotResponse:
         pass
 
     @send
-    def RelPointUser(
-        self, P: str, offsetX: float, offsetY: float, offsetZ: float, offsetRx: float, offsetRy: float, offsetRz: float
+    def RelMovJTool(
+        self,
+        offsetX: float,
+        offsetY: float,
+        offsetZ: float,
+        offsetRx: float,
+        offsetRy: float,
+        offsetRz: float,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _cp: int = None,
     ) -> DobotResponse:
         pass
+
+    @send
+    def RelMovLTool(
+        self,
+        offsetX: float,
+        offsetY: float,
+        offsetZ: float,
+        offsetRx: float,
+        offsetRy: float,
+        offsetRz: float,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _speed: int = None,
+        _cp: int = None,
+        _r: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
+    def RelMovJUser(
+        self,
+        offsetX: float,
+        offsetY: float,
+        offsetZ: float,
+        offsetRx: float,
+        offsetRy: float,
+        offsetRz: float,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _cp: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
+    def RelMovLUser(
+        self,
+        offsetX: float,
+        offsetY: float,
+        offsetZ: float,
+        offsetRx: float,
+        offsetRy: float,
+        offsetRz: float,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _speed: int = None,
+        _cp: int = None,
+        _r: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
+    def RelJointMovJ(
+        self,
+        offset1: float,
+        offset2: float,
+        offset3: float,
+        offset4: float,
+        offset5: float,
+        offset6: float,
+        _user: int = None,
+        _tool: int = None,
+        _a: int = None,
+        _v: int = None,
+        _cp: int = None,
+    ) -> DobotResponse:
+        pass
+
+    @send
+    def RelPointTool(
+        self,
+        pose: str,
+        offsetX: float,
+        offsetY: float,
+        offsetZ: float,
+        offsetRx: float,
+        offsetRy: float,
+        offsetRz: float,
+    ) -> DobotResponse2:
+        return f'{pose},{{{offsetX},{offsetY},{offsetZ},{offsetRx},{offsetRy},{offsetRz}}}'
+
+    @send
+    def RelPointUser(
+        self,
+        pose: str,
+        offsetX: float,
+        offsetY: float,
+        offsetZ: float,
+        offsetRx: float,
+        offsetRy: float,
+        offsetRz: float,
+    ) -> DobotResponse2:
+        return f'{pose},{{{offsetX},{offsetY},{offsetZ},{offsetRx},{offsetRy},{offsetRz}}}'
 
     @send
     def RelJoint(
@@ -520,8 +774,8 @@ class Dobot:
         offset4: float,
         offset5: float,
         offset6: float,
-    ) -> DobotResponse:
-        pass
+    ) -> DobotResponse2:
+        return f'{J1},{J2},{J3},{J4},{J5},{J6},{{{offset1},{offset2},{offset3},{offset4},{offset5},{offset6}}}'
 
     @send
     def GetCurrentCommandID(self) -> DobotResponse:
@@ -576,8 +830,8 @@ class Dobot:
         pass
 
     @send
-    def ForceDriveMode(self, x: int, y: int, z: int, rx: int, ry: int, rz: int, user: int = 0) -> DobotResponse:
-        pass
+    def ForceDriveMode(self, x: int, y: int, z: int, rx: int, ry: int, rz: int, user: int = 0) -> DobotResponse2:
+        return f'{{{x},{y},{z},{rx},{ry},{rz}}},user={user}'
 
     @send
     def ForceDriveSpped(self, speed: int) -> DobotResponse:
@@ -601,14 +855,14 @@ class Dobot:
         reference: int = 0,
         user: int = 0,
         tool: int = 0,
-    ) -> DobotResponse:
-        pass
+    ) -> DobotResponse2:
+        return f'{{{x},{y},{z},{rx},{ry},{rz}}},{{{fx},{fy},{fz},{frx},{fry},{frz}}},reference={reference},user={user},tool={tool}'
 
     @send
     def FCSetDeviation(
         self, x: int = 100, y: int = 100, z: int = 100, rx: int = 36, ry: int = 36, rz: int = 36, controltype: int = 0
-    ) -> DobotResponse:
-        pass
+    ) -> DobotResponse2:
+        return f'{{{x},{y},{z},{rx},{ry},{rz}}},{controltype}'
 
     @send
     def FCSetForceLimit(
@@ -647,8 +901,3 @@ class Dobot:
 
 if __name__ == '__main__':
     dobot = Dobot()
-    dobot.enableDebug = True
-
-    a = dobot.RunScript(1, 2)
-    b = dobot.RunScript(1, b=2, d=4)
-    w = dobot.RunScript(1, 2, d=None, projectName='my_project')

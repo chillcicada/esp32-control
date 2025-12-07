@@ -1,19 +1,9 @@
 import time
-from abc import ABC, abstractmethod
 
 from machine import ADC, Pin, time_pulse_us
 
 
-class Sensor(ABC):
-    """Abstract base class for sensors."""
-
-    @abstractmethod
-    def value(self):
-        """Return the sensor value."""
-        pass
-
-
-class UltrasonicSensor(Sensor):
+class UltrasonicSensor:
     """Ultrasonic Distance Sensor with trigger and echo pins."""
 
     def __init__(self, triger_pin_id, echo_pin_id, sonic=291, signal_us=(2, 10), timeout=500 * 2 * 30):
@@ -70,7 +60,7 @@ class TrackingPatterns:
     OFF_PATH = (1, 1)
 
 
-class TrackingSensor(Sensor):
+class TrackingSensor:
     """Tracking Sensor with two digital inputs."""
 
     def __init__(self, left_pin_id, right_pin_id):
@@ -87,7 +77,7 @@ class TrackingSensor(Sensor):
         return left_value, right_value
 
 
-class PHSensor(Sensor):
+class PHSensor:
     """pH Sensor connected to an analog pin."""
 
     def __init__(self, pin_id):
@@ -97,10 +87,9 @@ class PHSensor(Sensor):
 
     def value(self):
         """Return the pH sensor value as voltage."""
-        raw_value = self.analog.read_u16()
-        voltage = raw_value * 3.3 / 4095  # Convert to voltage (0-3.3V)
+        voltage = self.analog.read_uv() / 1e6
 
-        print(f'PHSensor analog value: {raw_value}, voltage: {voltage:.2f}V')
+        print(f'voltage: {voltage:.2f}V')
         return voltage
 
     def read_vol(self):

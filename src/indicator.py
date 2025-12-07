@@ -1,24 +1,9 @@
 import time
-from abc import ABC, abstractmethod
 
 from machine import Pin
 
 
-class Indicator(ABC):
-    """Abstract base class for indicators like beepers and LEDs."""
-
-    @abstractmethod
-    def on(self):
-        """Turn the indicator on."""
-        pass
-
-    @abstractmethod
-    def off(self):
-        """Turn the indicator off."""
-        pass
-
-
-class BeepIndicator(Indicator):
+class BeepIndicator:
     """Beep Indicator using a digital output pin."""
 
     def __init__(self, pin_id=5):
@@ -45,7 +30,7 @@ class BeepIndicator(Indicator):
             time.sleep(delay)
 
 
-class LEDIndicator(Indicator):
+class LEDIndicator:
     """LED Indicator using a digital output pin."""
 
     def __init__(self, pin_id=2, period_ms=500):
