@@ -43,6 +43,7 @@ class Dobot:
 
         self.enableDebug = False
 
+    # core functions used to communicate with Dobot
     # region core
 
     def parse(self, data: str, handler=None) -> DobotResponse:
@@ -76,24 +77,24 @@ class Dobot:
                     raise ConnectionError('Not connected to Dobot.')
 
                 sign = signature(func)
-                return_type = signature(func).return_annotation
-
-                bound = sign.bind(self, *args, **kwargs)
-                bound.apply_defaults()
+                func_name = func.__name__
+                return_type = sign.return_annotation
 
                 if return_type == DobotResponse:
+                    bound = sign.bind(self, *args, **kwargs)
+                    bound.apply_defaults()
                     params = [
                         f'{k.removeprefix("_")}={v}' if k.startswith('_') else str(v)
                         for k, v in bound.arguments.items()
                         if k != 'self' and v is not None
                     ]
-                    command = f'{func.__name__}({",".join(params)})'
+                    command = f'{func_name}({",".join(params)})'
                 elif return_type == DobotResponse2:
                     params = func(self, *args, **kwargs)
-                    command = f'{func.__name__}({params})'
+                    command = f'{func_name}({params})'
                 else:
-                    self.error(f'Invalid return type for {func.__name__}: {return_type}')
-                    raise TypeError(f'Invalid return type for {func.__name__}: {return_type}')
+                    self.error(f'Invalid return type for {func_name}: {return_type}')
+                    raise TypeError(f'Invalid return type for {func_name}: {return_type}')
 
                 self.socket.sendall(command.encode() + b'\n')
                 self.debug(f'Sent command: {command}')
@@ -763,7 +764,7 @@ class Dobot:
         pass
 
     # endregion
-    # -----------
+    # ---------------
     # region recovery
 
     @send()
@@ -783,8 +784,8 @@ class Dobot:
         pass
 
     # endregion
-    # -----------------
-    # region log export
+    # -------------
+    # region export
 
     @send()
     def LogExportUSB(self, range: int) -> DobotResponse:
@@ -859,6 +860,92 @@ class Dobot:
     @send()
     def FCSetForce(self, x: float, y: float, z: float, rx: float, ry: float, rz: float) -> DobotResponse:
         pass
+
+    # endregion
+    # self-defined functions for easier usage can be added below
+    # ------------
+    # region extra
+
+    @send()
+    def SendCommand(self, cmd: str) -> DobotResponse2:
+        return cmd
+
+    def MovJJoint(
+        self,
+        J1: float,
+        J2: float,
+        J3: float,
+        J4: float,
+        J5: float,
+        J6: float,
+        user: int = None,
+        tool: int = None,
+        a: int = None,
+        v: int = None,
+        cp: int = None,
+    ) -> DobotResponse:
+        return self.MovJ(f'joint={{{J1},{J2},{J3},{J4},{J5},{J6}}}', user, tool, a, v, cp)
+
+    def MovJPose(
+        self,
+        X: float,
+        Y: float,
+        Z: float,
+        Rx: float,
+        Ry: float,
+        Rz: float,
+        user: int = None,
+        tool: int = None,
+        a: int = None,
+        v: int = None,
+        cp: int = None,
+    ) -> DobotResponse:
+        return self.MovJ(f'pose={{{X},{Y},{Z},{Rx},{Ry},{Rz}}}', user, tool, a, v, cp)
+
+    def MovLJoint(
+        self,
+        J1: float,
+        J2: float,
+        J3: float,
+        J4: float,
+        J5: float,
+        J6: float,
+        user: int = None,
+        tool: int = None,
+        a: int = None,
+        v: int = None,
+        speed: str = None,
+        cp: int = None,
+        r: str = None,
+    ) -> DobotResponse:
+        return self.MovL(f'joint={{{J1},{J2},{J3},{J4},{J5},{J6}}}', user, tool, a, v, speed, cp, r)
+
+    def MovLPose(
+        self,
+        X: float,
+        Y: float,
+        Z: float,
+        Rx: float,
+        Ry: float,
+        Rz: float,
+        user: int = None,
+        tool: int = None,
+        a: int = None,
+        v: int = None,
+        speed: str = None,
+        cp: int = None,
+        r: str = None,
+    ) -> DobotResponse:
+        return self.MovL(f'pose={{{X},{Y},{Z},{Rx},{Ry},{Rz}}}', user, tool, a, v, speed, cp, r)
+
+    def Home(self) -> DobotResponse:
+        return self.MovJJoint(0, 0, 0, 0, 0, 0)
+
+    def Pack(self) -> DobotResponse:
+        return self.MovJJoint(-90, 0, -140, -40, 0, 0)
+
+    def Stay(self) -> DobotResponse:
+        return self.MovJJoint(0, 0, 90, 0, 90, 0)
 
     # endregion
 

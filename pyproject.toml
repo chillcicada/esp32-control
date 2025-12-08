@@ -3,7 +3,9 @@ name = "control"
 version = "0.1.0"
 description = "Modern control program on ESP32 for Lesson 'Manufacturing Engineering Experience'"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "dobottcp>=1.1.4",
+]
 
 [dependency-groups]
 dev = ["micropython-esp32-stubs>=1.26.0.post1"]
