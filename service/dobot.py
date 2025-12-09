@@ -5,9 +5,9 @@ Dobot TCP Wrapper Based on Function Signatures
 @license: MIT
 """
 
+import socket
 from functools import wraps
 from inspect import signature
-from socket import AF_INET, SOCK_DGRAM, socket
 
 # Use type aliases for better readability
 type DobotResponse = tuple[int, list, str]
@@ -36,10 +36,10 @@ class DobotErrorCode:
 
 
 class Dobot:
-    def __init__(self, ip='192.168.5.1', port=29999):
+    def __init__(self, ip='192.168.200.1', port=29999):
         self.ip = ip
         self.port = port
-        self.socket = None
+        self.conn = None
 
         self.enableDebug = False
 
@@ -72,7 +72,7 @@ class Dobot:
         def decorator(func):
             @wraps(func)
             def sender(self: 'Dobot', *args, **kwargs) -> DobotResponse:
-                if not self.socket:
+                if not self.conn:
                     self.error('Not connected to Dobot.')
                     raise ConnectionError('Not connected to Dobot.')
 
@@ -96,10 +96,13 @@ class Dobot:
                     self.error(f'Invalid return type for {func_name}: {return_type}')
                     raise TypeError(f'Invalid return type for {func_name}: {return_type}')
 
-                self.socket.sendall(command.encode() + b'\n')
+                self.conn.sendall(command.encode() + b'\n')
                 self.debug(f'Sent command: {command}')
 
-                return self.parse(self.socket.recv(1024).decode(), handler)
+                response = self.conn.recv(1024).decode()
+                self.debug(f'Received response: {response.strip()}')
+
+                return self.parse(response.strip(), handler)
 
             return sender
 
@@ -112,26 +115,26 @@ class Dobot:
     def error(self, str: str) -> None:
         print(f'[Dobot ERROR] {str}')
 
-    def connect(self, timeout=2) -> None:
+    def connect(self, timeout=None) -> None:
         try:
-            self.debug(f'Connecting to {self.ip}:{self.port} with timeout {timeout}s')
-            self.socket = socket(AF_INET, SOCK_DGRAM)
-            self.socket.settimeout(timeout)
-            self.socket.connect((self.ip, self.port))
+            self.debug(f'Connecting to {self.ip}:{self.port}')
+            self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.conn.settimeout(timeout)
+            self.conn.connect((self.ip, self.port))
             self.debug('Connection established.')
 
         except Exception as e:
             self.error(f'Connection failed: {e}')
-            self.socket = None
+            self.conn = None
 
     def disconnect(self) -> None:
-        if not self.socket:
+        if not self.conn:
             self.debug('No active connection to disconnect.')
             return
 
         self.debug('Disconnecting...')
-        self.socket.close()
-        self.socket = None
+        self.conn.close()
+        self.conn = None
         self.debug('Disconnected.')
 
     # endregion
@@ -951,5 +954,21 @@ class Dobot:
 
 
 if __name__ == '__main__':
-    dobot = Dobot()
+    dobot = Dobot('192.168.200.1', 29999)
     dobot.enableDebug = True
+
+    dobot.connect(10)
+
+    import time
+
+    dobot.EnableRobot()
+
+    time.sleep(10)
+
+    dobot.Pack()
+
+    time.sleep(10)
+
+    dobot.DisableRobot()
+
+    dobot.disconnect()

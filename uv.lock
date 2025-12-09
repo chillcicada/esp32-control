@@ -10,7 +10,7 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "maixpy" },
-    { name = "micropython-esp32-stubs" },
+    { name = "micropython-esp32-esp32-generic-s2-stubs" },
 ]
 
 [package.metadata]
@@ -18,7 +18,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "maixpy", specifier = ">=4.12.1" },
-    { name = "micropython-esp32-stubs", specifier = ">=1.26.0.post1" },
+    { name = "micropython-esp32-esp32-generic-s2-stubs", specifier = ">=1.26.0.post1" },
 ]
 
 [[package]]
@@ -31,15 +31,15 @@ wheels = [
 ]
 
 [[package]]
-name = "micropython-esp32-stubs"
+name = "micropython-esp32-esp32-generic-s2-stubs"
 version = "1.26.0.post1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "micropython-stdlib-stubs" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/52/2f/813b78049ed7fd84eea457fb66d21420e68790300d5e86418d59b93f4103/micropython_esp32_stubs-1.26.0.post1.tar.gz", hash = "sha256:e4f31edb2b4a9a6b152adce8115f8256937ee97601c386d499aff369a3a78fe5", size = 94356, upload-time = "2025-09-01T21:41:57.617Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a5/83/e865dfb77fbf1437e5e6449a0833754a1e729b4f840468aee91158dc14f0/micropython_esp32_esp32_generic_s2_stubs-1.26.0.post1.tar.gz", hash = "sha256:392ba1fea2835af2d3cad11a6f6a82f9e7d7e1571b3c2631ea03dec9fc6f3f44", size = 89862, upload-time = "2025-09-02T20:26:55.971Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/f7/d44a28971ed7c21de417b31a056c44e3cae34c0bd4bd5da7aa2d1381cc85/micropython_esp32_stubs-1.26.0.post1-py2.py3-none-any.whl", hash = "sha256:930349d4711e4727c5fcb0062d86a59246a1b616bdb66a033dd1db3410d43029", size = 120420, upload-time = "2025-09-01T21:41:56.118Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/80/6d529dcb7aab1e65df5062868a0f59dedd8f6dcce788ee7294a6b858fda1/micropython_esp32_esp32_generic_s2_stubs-1.26.0.post1-py2.py3-none-any.whl", hash = "sha256:5aff9d6df9a59eb7c9fadfb7694d36922d1315ac1ce8c9a1937d07f02dbd465f", size = 115732, upload-time = "2025-09-02T20:26:54.791Z" },
 ]
 
 [[package]]
