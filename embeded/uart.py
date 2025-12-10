@@ -13,24 +13,35 @@ class UARTWrapper:
 
     def send(self, buf):
         """Send data over UART."""
-        self.uart.write(buf)
+        self.uart.write(buf + b'\n')
 
         print(f'Sent data over UART: {buf}')
 
-    def recv(self):
+    def recv(self) -> str:
         """Receive data over UART."""
-        if self.uart.any() <= 0:
-            print('No data available to read from UART')
-            return None
-
         buf = self.uart.read()
 
         if not buf:
-            print('Received empty data from UART')
             return None
 
-        print(f'Received data over UART: {buf}')
+        return buf.decode()
 
 
 if __name__ == '__main__':
-    pass
+    uart = UARTWrapper(2, 115200)
+
+    uart.send(b'Hello UART from esp32!')
+
+    uart.send(b'Testing UART communication.')
+    
+    data = uart.recv()
+    
+    print('data:', data)
+
+    while True:
+        try:
+            data = uart.recv()
+            if data:
+                print(f'Main received: {data.strip()}')
+        except KeyboardInterrupt:
+            break

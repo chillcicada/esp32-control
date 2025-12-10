@@ -1,45 +1,9 @@
-from abc import ABC, abstractmethod
-
-
 class ConnStatus:
     CONNECTED = True
     DISCONNECTED = False
 
 
-class ConnInterface(ABC):
-    @abstractmethod
-    def connect(self, address) -> None:
-        """Establish a connection to the specified address."""
-        pass
-
-    @abstractmethod
-    def disconnect(self) -> None:
-        """Terminate the current connection."""
-        pass
-
-    @abstractmethod
-    def send(self, data: bytes) -> None:
-        """Send data over the connection."""
-        pass
-
-    @abstractmethod
-    def recv(self, buffer_size: int) -> str:
-        """Receive decoded data from the connection."""
-        pass
-
-    @abstractmethod
-    def settimeout(self, timeout: float) -> None:
-        """Set the timeout for the connection."""
-        pass
-
-    @property
-    @abstractmethod
-    def status(self) -> bool:
-        """Get the current connection status."""
-        pass
-
-
-class SocketConn(ConnInterface):
+class SocketConn:
     def __init__(self):
         self.conn = None
         self.status = ConnStatus.DISCONNECTED
@@ -73,7 +37,7 @@ class SocketConn(ConnInterface):
             self.conn.settimeout(timeout)
 
 
-class SerialConn(ConnInterface):
+class SerialConn:
     def __init__(self):
         self.conn = None
         self.status = ConnStatus.DISCONNECTED
@@ -81,7 +45,7 @@ class SerialConn(ConnInterface):
     def connect(self, address) -> None:
         import serial
 
-        self.conn = serial.Serial(port=address, baudrate=9600)
+        self.conn = serial.Serial(port=address, baudrate=115200)
 
         if self.conn and self.conn.is_open:
             self.status = ConnStatus.CONNECTED
@@ -104,3 +68,15 @@ class SerialConn(ConnInterface):
     def settimeout(self, timeout: float) -> None:
         if self.conn and self.conn.is_open:
             self.conn.timeout = timeout
+
+
+if __name__ == '__main__':
+    serial_conn = SerialConn()
+    print('stage 1')
+    serial_conn.connect('/dev/ttyS0')
+    serial_conn.settimeout(10)
+    print('stage 2')
+    serial_conn.send(b'DisableRobot()')
+    print('stage 3')
+    response = serial_conn.recv(1024)
+    print(f'Response: {response}')

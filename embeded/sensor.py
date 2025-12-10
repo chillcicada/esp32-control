@@ -85,32 +85,40 @@ class PHSensor:
         self.analog = ADC(Pin(pin_id))
         self.analog.init(atten=ADC.ATTN_11DB)  # Set full range to 3.3V
 
+        print('[WARNING] The ADC reading method is unstable. Consider using an external ADC for better accuracy.')
+
     def value(self):
         """Return the pH sensor value as voltage."""
         voltage = self.analog.read_uv() / 1e6
 
-        print(f'voltage: {voltage:.2f}V')
         return voltage
 
-    def read_vol(self):
+    def read_v(self):
         """Return the voltage reading from the pH sensor."""
         return self.value()
 
-    def read_ph(self, slope=-5.7541, intercept=16.654):
+    def read_ph(self, slope=-5.7541, intercept=16.5962):
         """Convert voltage to pH value."""
-        return slope * self.value() + intercept
+        return slope * self.read_v() + intercept
 
 
 if __name__ == '__main__':
-    # Example usage for the PHSensor
-    ph_sensor = PHSensor(36)
+    # Example usage for the PHSensor with Kalman Filter
+    from .filter import KalmanFilter
 
+    ph_sensor = PHSensor(35)
+    kalman_filter = KalmanFilter(7.0, 1.0, 0.01, 0.1)
+    counter = 0
     while True:
         try:
-            ph_value = ph_sensor.read_ph()
-            print(f'PH Value: {ph_value:.2f}')
+            raw_v = ph_sensor.read_v()
+            filtered_v = kalman_filter.update(raw_v)
 
-            time.sleep(0.5)
+            counter += 1
+            if counter == 100:
+                print(f'Filtered v: {filtered_v:.2f}')
+                counter = 0
+            time.sleep(0.005)
 
         except KeyboardInterrupt:
             break

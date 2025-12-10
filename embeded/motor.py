@@ -23,6 +23,8 @@ class StepperMotor:
         self.pul_pin.value(0)
         self.dir_pin.value(0)
 
+        print(f'Initializing StepperMotor with PUL pin {pul_pin_id} and DIR pin {dir_pin_id}')
+
     def step(self, steps, delay_us=500, direction=None):
         """Move the motor by a specific number of steps."""
         if direction is not None:
@@ -37,7 +39,7 @@ class StepperMotor:
             self.pul_pin.value(1)
             time.sleep_us(10)
             self.pul_pin.value(0)
-            time.sleep_us(delay_us)
+            time.sleep_us(int(delay_us))
 
         self.current_position += steps if actual_direction == StepperDirection.UP else -steps
 
@@ -71,14 +73,48 @@ class StepperMotor:
         self.current_position = 0
 
 
+class MixingMotor:
+    """Mixing Motor"""
+
+    def __init__(self, pin_id):
+        """Mixing Motor using a digital output pin."""
+        self.pin = Pin(pin_id, Pin.OUT)
+
+        self.pin.value(0)
+
+        print(f'Initializing MixingMotor on pin {pin_id}')
+
+    def on(self):
+        """Turn the mixing motor on."""
+        self.pin.value(1)
+
+    def off(self):
+        """Turn the mixing motor off."""
+        self.pin.value(0)
+
+    def trigger(self):
+        """Trigger the mixing motor."""
+        self.pin.value(1 - self.pin.value())
+
+    def status(self):
+        """Get the current status of the mixing motor."""
+        return self.pin.value()
+
+
 if __name__ == '__main__':
     # Example usage of StepperMotor
     stepper_motor = StepperMotor(2, 4)
 
     delay_up = stepper_motor.set_rpm(100)
-    stepper_motor.step(4000, delay_up, StepperDirection.UP)
+    stepper_motor.step(2000, delay_up, StepperDirection.UP)
     time.sleep(1)
 
-    delay_down = stepper_motor.set_rpm(10)
-    stepper_motor.step(4000, delay_down, StepperDirection.DOWN)
+    delay_down = stepper_motor.set_rpm(100)
+    stepper_motor.step(2000, delay_down, StepperDirection.DOWN)
     time.sleep(1)
+
+    # # Example usage of MixingMotor
+    # mixing_motor = MixingMotor(32)
+    # mixing_motor.on()
+    # time.sleep(5)
+    # mixing_motor.trigger()

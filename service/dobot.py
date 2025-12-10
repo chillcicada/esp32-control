@@ -4,14 +4,97 @@ Dobot TCP Wrapper Based on Function Signatures
 @author: chillcicada
 @license: MIT
 """
-
-import socket
+from typing import List, Any
 from functools import wraps
 from inspect import signature
 
+# region uart
+# import .uart
+from maix import pinmap, uart
+
+pinmap.set_pin_function('A29', 'UART2_RX')
+pinmap.set_pin_function('A28', 'UART2_TX')
+serial_esp = uart.UART('/dev/ttyS2', 115200)
+
+# endregion
+
+# region conn
+# from .conn import SerialConn, SocketConn
+class ConnStatus:
+    CONNECTED = True
+    DISCONNECTED = False
+
+
+class SocketConn:
+    def __init__(self):
+        self.conn = None
+        self.status = ConnStatus.DISCONNECTED
+
+    def connect(self, address) -> None:
+        import socket
+
+        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.conn.connect(address)
+
+        if self.conn:
+            self.status = ConnStatus.CONNECTED
+
+    def disconnect(self) -> None:
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+            self.status = ConnStatus.DISCONNECTED
+
+    def send(self, data: bytes) -> None:
+        if self.conn:
+            self.conn.sendall(data + b'\n')
+
+    def recv(self, buffer_size: int) -> str:
+        if self.conn:
+            return self.conn.recv(buffer_size).decode()
+        return ''
+
+    def settimeout(self, timeout: float) -> None:
+        if self.conn:
+            self.conn.settimeout(timeout)
+
+
+class SerialConn:
+    def __init__(self):
+        self.conn = None
+        self.status = ConnStatus.DISCONNECTED
+
+    def connect(self, address) -> None:
+        import serial
+
+        self.conn = serial.Serial(port=address, baudrate=115200)
+
+        if self.conn and self.conn.is_open:
+            self.status = ConnStatus.CONNECTED
+
+    def disconnect(self) -> None:
+        if self.status:
+            self.conn.close()
+            self.conn = None
+            self.status = ConnStatus.DISCONNECTED
+
+    def send(self, data: bytes) -> None:
+        if self.conn and self.conn.is_open:
+            self.conn.write(data + b'\n')
+
+    def recv(self, buffer_size: int) -> str:
+        if self.conn and self.conn.is_open:
+            return self.conn.read(buffer_size).decode()
+        return ''
+
+    def settimeout(self, timeout: float) -> None:
+        if self.conn and self.conn.is_open:
+            self.conn.timeout = timeout
+# endregion
+
 # Use type aliases for better readability
-type DobotResponse = tuple[int, list, str]
-type DobotResponse2 = tuple[int, list, str]
+DobotResponse = List[Any]
+DobotResponse2 = List[Any]
 
 
 class DobotErrorCode:
@@ -29,53 +112,93 @@ class DobotErrorCode:
 
     CMD_NOT_FOUND = -10000
     PARAM_NUM_ERROR = -20000
+
     REQ_PARAM_TYPE_ERROR = -30000  # -3000X
-    REQ_PARAM_OUT_OF_RANGE = -40000  # -4000X
+    REQ_PARAM_OVER_RANGE = -40000  # -4000X
     OPT_PARAM_TYPE_ERROR = -50000  # -5000X
-    OPT_PARAM_OUT_OF_RANGE = -60000  # -6000X
+    OPT_PARAM_OVER_RANGE = -60000  # -6000X
 
 
 class Dobot:
-    def __init__(self, ip='192.168.200.1', port=29999):
-        self.ip = ip
-        self.port = port
-        self.conn = None
-
-        self.enableDebug = False
+    def __init__(self, address, isSerial: bool = False):
+        self.address = address
+        self.conn = SerialConn() if isSerial else SocketConn()
+        self.isDebug = False
 
     # core functions used to communicate with Dobot
     # region core
 
-    def parse(self, data: str, handler=None) -> DobotResponse:
-        parts = data.strip().split(',')
+    def handle(self, err: int, params: list, cmd: str) -> DobotResponse:
+        if err == DobotErrorCode.SUCCESS:
+            return params
 
-        if not parts:
-            self.error('Received empty response.')
-            return DobotErrorCode.EXECUTION_FAILED, [], ''
+        if err < DobotErrorCode.OPT_PARAM_OVER_RANGE:
+            self.error(f'Optional parameter at {DobotErrorCode.OPT_PARAM_OVER_RANGE - err} in {cmd} out of range.')
+        elif err < DobotErrorCode.OPT_PARAM_TYPE_ERROR:
+            self.error(f'Optional parameter at {DobotErrorCode.OPT_PARAM_TYPE_ERROR - err} in {cmd} type error.')
+        elif err < DobotErrorCode.REQ_PARAM_OVER_RANGE:
+            self.error(f'Required parameter at {DobotErrorCode.REQ_PARAM_OVER_RANGE - err} in {cmd} out of range.')
+        elif err < DobotErrorCode.REQ_PARAM_TYPE_ERROR:
+            self.error(f'Required parameter at {DobotErrorCode.REQ_PARAM_TYPE_ERROR - err} in {cmd} type error.')
 
-        try:
-            err = int(parts[0])
-            params = [float(p) if '.' in p else int(p) for p in parts[1:-1]]
-            msg = parts[-1] if len(parts) > 1 else ''
+        match err:
+            case DobotErrorCode.EXECUTION_FAILED:
+                self.error('Execution failed.')
+            case DobotErrorCode.ALARMED:
+                self.error('Robot is in alarmed state.')
+                self.ClearError()
+                time.sleep(1)
+            case DobotErrorCode.EMERGENCY_STOP:
+                self.error('Emergency stop activated.')
+            case DobotErrorCode.POWER_OFF:
+                self.error('Power is off.')
+            case DobotErrorCode.SCRIPT_RUNNING:
+                self.error('Script is running.')
+            case DobotErrorCode.MISMATCHED:
+                self.error(f'Mismatched move command {cmd} with type.')
+            case DobotErrorCode.SCRIPT_PAUSED:
+                self.error('Script is paused.')
+            case DobotErrorCode.AUTH_EXPIRED:
+                self.error('Authorization expired.')
+            case DobotErrorCode.CMD_NOT_FOUND:
+                self.error(f'Command {cmd} not found.')
+            case DobotErrorCode.PARAM_NUM_ERROR:
+                self.error(f'Parameter number error in command {cmd}.')
+            case _:
+                self.error(f'Unknown error code: {err}')
 
-            if handler:
-                return handler(err, params, msg)
+        return params
 
-            return err, params, msg
+    def parse(self, response: str, cmd: str, handler=None) -> DobotResponse:
+        parts = response.split(',', 1)
+        assert len(parts) == 2, 'Invalid response format.'
 
-        except ValueError as e:
-            self.error(f'Parsing response failed: {e}')
-            return DobotErrorCode.EXECUTION_FAILED, [], ''
+        err, params = parts
+        err = int(err)
+        params = params[1:-1]  # remove the surrounding braces
+        params = [float(p) if '.' in p else int(p) for p in params.split(',')] if params else []
+
+        self.debug(f'Parsed error code: {err}, params: {params}')
+
+        return handler(err, params, cmd) if handler else self.handle(err, params, cmd)
+
+    def send_cmd(self, cmd: str, handler=None) -> DobotResponse:
+        if not self.conn.status:
+            self.error('Not connected to Dobot.')
+            raise ConnectionError('Not connected to Dobot.')
+        
+        self.conn.send(cmd.encode())
+        self.debug(f'Sent command: {cmd}')
+
+        response = self.conn.recv(400).strip()
+        self.debug(f'Response: {response}')
+        return self.parse(response.removesuffix(f',{cmd};'), cmd, handler)
 
     @staticmethod
     def send(handler=None):
         def decorator(func):
             @wraps(func)
             def sender(self: 'Dobot', *args, **kwargs) -> DobotResponse:
-                if not self.conn:
-                    self.error('Not connected to Dobot.')
-                    raise ConnectionError('Not connected to Dobot.')
-
                 sign = signature(func)
                 func_name = func.__name__
                 return_type = sign.return_annotation
@@ -88,28 +211,22 @@ class Dobot:
                         for k, v in bound.arguments.items()
                         if k != 'self' and v is not None
                     ]
-                    command = f'{func_name}({",".join(params)})'
+                    cmd = f'{func_name}({",".join(params)})'
                 elif return_type == DobotResponse2:
                     params = func(self, *args, **kwargs)
-                    command = f'{func_name}({params})'
+                    cmd = params
                 else:
                     self.error(f'Invalid return type for {func_name}: {return_type}')
                     raise TypeError(f'Invalid return type for {func_name}: {return_type}')
 
-                self.conn.sendall(command.encode() + b'\n')
-                self.debug(f'Sent command: {command}')
-
-                response = self.conn.recv(1024).decode()
-                self.debug(f'Received response: {response.strip()}')
-
-                return self.parse(response.strip(), handler)
+                return self.send_cmd(cmd)
 
             return sender
 
         return decorator
 
     def debug(self, str: str) -> None:
-        if self.enableDebug:
+        if self.isDebug:
             print(f'[Dobot DEBUG] {str}')
 
     def error(self, str: str) -> None:
@@ -117,10 +234,9 @@ class Dobot:
 
     def connect(self, timeout=None) -> None:
         try:
-            self.debug(f'Connecting to {self.ip}:{self.port}')
-            self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.debug(f'Connecting to {self.address}')
+            self.conn.connect(self.address)
             self.conn.settimeout(timeout)
-            self.conn.connect((self.ip, self.port))
             self.debug('Connection established.')
 
         except Exception as e:
@@ -128,14 +244,17 @@ class Dobot:
             self.conn = None
 
     def disconnect(self) -> None:
-        if not self.conn:
+        if not self.conn.status:
             self.debug('No active connection to disconnect.')
             return
 
         self.debug('Disconnecting...')
-        self.conn.close()
+        self.conn.disconnect()
         self.conn = None
         self.debug('Disconnected.')
+
+    def enable_debug(self) -> None:
+        self.isDebug = True
 
     # endregion
     # --------------
@@ -869,50 +988,36 @@ class Dobot:
     # ------------
     # region extra
 
-    @send()
-    def SendCommand(self, cmd: str) -> DobotResponse2:
-        return cmd
+    def Grab(self, close: bool, length=None) -> DobotResponse:
+        return self.send_cmd(f'SetParallelGripper({length or 38 if close else 70})')
 
     def MovJJoint(
         self,
-        J1: float,
-        J2: float,
-        J3: float,
-        J4: float,
-        J5: float,
-        J6: float,
+        jointList: list,
         user: int = None,
         tool: int = None,
         a: int = None,
         v: int = None,
         cp: int = None,
     ) -> DobotResponse:
-        return self.MovJ(f'joint={{{J1},{J2},{J3},{J4},{J5},{J6}}}', user, tool, a, v, cp)
+        assert len(jointList) == 6, 'jointList must contain exactly 6 elements.'
+        return self.MovJ(f'joint={{{",".join(map(str, jointList))}}}', user, tool, a, v, cp)
 
     def MovJPose(
         self,
-        X: float,
-        Y: float,
-        Z: float,
-        Rx: float,
-        Ry: float,
-        Rz: float,
+        poseList: list,
         user: int = None,
         tool: int = None,
         a: int = None,
         v: int = None,
         cp: int = None,
     ) -> DobotResponse:
-        return self.MovJ(f'pose={{{X},{Y},{Z},{Rx},{Ry},{Rz}}}', user, tool, a, v, cp)
+        assert len(poseList) == 6, 'poseList must contain exactly 6 elements.'
+        return self.MovJ(f'pose={{{",".join(map(str, poseList))}}}', user, tool, a, v, cp)
 
     def MovLJoint(
         self,
-        J1: float,
-        J2: float,
-        J3: float,
-        J4: float,
-        J5: float,
-        J6: float,
+        jointList: list,
         user: int = None,
         tool: int = None,
         a: int = None,
@@ -921,16 +1026,12 @@ class Dobot:
         cp: int = None,
         r: str = None,
     ) -> DobotResponse:
-        return self.MovL(f'joint={{{J1},{J2},{J3},{J4},{J5},{J6}}}', user, tool, a, v, speed, cp, r)
+        assert len(jointList) == 6, 'jointList must contain exactly 6 elements.'
+        return self.MovL(f'joint={{{",".join(map(str, jointList))}}}', user, tool, a, v, speed, cp, r)
 
     def MovLPose(
         self,
-        X: float,
-        Y: float,
-        Z: float,
-        Rx: float,
-        Ry: float,
-        Rz: float,
+        poseList: list,
         user: int = None,
         tool: int = None,
         a: int = None,
@@ -939,35 +1040,92 @@ class Dobot:
         cp: int = None,
         r: str = None,
     ) -> DobotResponse:
-        return self.MovL(f'pose={{{X},{Y},{Z},{Rx},{Ry},{Rz}}}', user, tool, a, v, speed, cp, r)
+        assert len(poseList) == 6, 'poseList must contain exactly 6 elements.'
+        return self.MovL(f'pose={{{",".join(map(str, poseList))}}}', user, tool, a, v, speed, cp, r)
+
+    def RelPointUserJoint(
+        self,
+        jointList: list,
+        offsetList: list,
+    ) -> DobotResponse:
+        assert len(jointList) == 6, 'jointList must contain exactly 6 elements.'
+        assert len(offsetList) == 6, 'offsetList must contain exactly 6 elements.'
+        return self.RelPointUser(f'joint={{{",".join(map(str, jointList))}}}', f'{{{",".join(map(str, offsetList))}}}')
+
+    def RelPointUserPose(
+        self,
+        poseList: list,
+        offsetList: list,
+    ) -> DobotResponse:
+        assert len(poseList) == 6, 'poseList must contain exactly 6 elements.'
+        assert len(offsetList) == 6, 'offsetList must contain exactly 6 elements.'
+        return self.RelPointUser(f'pose={{{",".join(map(str, poseList))}}}', f'{{{",".join(map(str, offsetList))}}}')
 
     def Home(self) -> DobotResponse:
-        return self.MovJJoint(0, 0, 0, 0, 0, 0)
+        return self.MovJJoint([0, 0, 0, 0, 0, 0])
 
     def Pack(self) -> DobotResponse:
-        return self.MovJJoint(-90, 0, -140, -40, 0, 0)
+        return self.MovJJoint([-90, 0, -140, -40, 0, 0])
 
     def Stay(self) -> DobotResponse:
-        return self.MovJJoint(0, 0, 90, 0, 90, 0)
+        return self.MovJJoint([0, 0, 90, 0, 90, 0])
 
     # endregion
 
 
 if __name__ == '__main__':
-    dobot = Dobot('192.168.200.1', 29999)
-    dobot.enableDebug = True
-
-    dobot.connect(10)
-
     import time
 
-    dobot.EnableRobot()
+    P1 = [-180, -20, -110, -50, -60, 0]
+    P2 = [-120, -20, -110, -50, -30, 0]
+    P3 = [-150, -30, -100, -50, -60, 0]
+    P4 = [-100, -30, -100, -50, -50, 0]
 
-    time.sleep(10)
+    dobot = Dobot('/dev/ttyS0', isSerial=True)
+
+    dobot.enable_debug()
+
+    dobot.connect(5)
+
+    # dobot.ClearError()
+
+    # time.sleep(2)
+
+    dobot.EnableRobot(0.2, 0, 0, 0, 1)
+
+    time.sleep(1)
 
     dobot.Pack()
 
-    time.sleep(10)
+    # dobot.Grab(False)
+
+    # time.sleep(1)
+
+    # dobot.MovJJoint(P2)
+
+    # time.sleep(1)
+
+    # pose = dobot.RelPointUserJoint(P2, [0, 0, -30, 0, 0, 0])
+
+    # dobot.MovLPose(pose)
+
+    # time.sleep(1)
+
+    # dobot.Grab(True)
+
+    # time.sleep(1)
+
+    # dobot.MovJJoint(P1)
+
+    # pose = dobot.RelPointUserJoint(P1, [0, 0, 160, 0, 0, 0])
+
+    # dobot.MovLPose(pose)
+
+    # time.sleep(2)
+
+    # serial_esp.write(b'MIX\n')
+
+    time.sleep(2)
 
     dobot.DisableRobot()
 
