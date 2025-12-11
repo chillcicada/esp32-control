@@ -4,9 +4,10 @@ Dobot TCP Wrapper Based on Function Signatures
 @author: chillcicada
 @license: MIT
 """
-from typing import List, Any
+
 from functools import wraps
 from inspect import signature
+from typing import List
 
 # region uart
 # import .uart
@@ -17,6 +18,7 @@ pinmap.set_pin_function('A28', 'UART2_TX')
 serial_esp = uart.UART('/dev/ttyS2', 115200)
 
 # endregion
+
 
 # region conn
 # from .conn import SerialConn, SocketConn
@@ -49,8 +51,9 @@ class SocketConn:
         if self.conn:
             self.conn.sendall(data + b'\n')
 
-    def recv(self, buffer_size: int) -> str:
+    def recv(self, buffer_size=1024) -> str:
         if self.conn:
+            # return self.conn.recv(buffer_size).decode()
             return self.conn.recv(buffer_size).decode()
         return ''
 
@@ -82,19 +85,21 @@ class SerialConn:
         if self.conn and self.conn.is_open:
             self.conn.write(data + b'\n')
 
-    def recv(self, buffer_size: int) -> str:
+    def recv(self) -> str:
         if self.conn and self.conn.is_open:
-            return self.conn.read(buffer_size).decode()
+            return self.conn.readline().decode()
         return ''
 
     def settimeout(self, timeout: float) -> None:
         if self.conn and self.conn.is_open:
             self.conn.timeout = timeout
+
+
 # endregion
 
 # Use type aliases for better readability
-DobotResponse = List[Any]
-DobotResponse2 = List[Any]
+DobotResponse = List
+DobotResponse2 = List
 
 
 class DobotErrorCode:
@@ -128,7 +133,7 @@ class Dobot:
     # core functions used to communicate with Dobot
     # region core
 
-    def handle(self, err: int, params: list, cmd: str) -> DobotResponse:
+    def resolve(self, err: int, params: list, cmd: str) -> DobotResponse:
         if err == DobotErrorCode.SUCCESS:
             return params
 
@@ -169,33 +174,43 @@ class Dobot:
 
         return params
 
-    def parse(self, response: str, cmd: str, handler=None) -> DobotResponse:
-        parts = response.split(',', 1)
-        assert len(parts) == 2, 'Invalid response format.'
+    def parse(self, res: str, cmd: str, handler=None) -> DobotResponse:
+        func_name, _ = cmd.split('(', 1)
+        err, params_ = res.split(',{', 1)
+        params, _ = params_.split('},' + func_name, 1)
 
-        err, params = parts
         err = int(err)
-        params = params[1:-1]  # remove the surrounding braces
         params = [float(p) if '.' in p else int(p) for p in params.split(',')] if params else []
+        cmd = func_name + _
 
-        self.debug(f'Parsed error code: {err}, params: {params}')
+        self.debug(f'Parsed error code: {err}; params: {params}; from command: {cmd}')
 
-        return handler(err, params, cmd) if handler else self.handle(err, params, cmd)
+        return handler(err, params, cmd) if handler else self.resolve(err, params, cmd)
 
     def send_cmd(self, cmd: str, handler=None) -> DobotResponse:
         if not self.conn.status:
             self.error('Not connected to Dobot.')
             raise ConnectionError('Not connected to Dobot.')
-        
+
         self.conn.send(cmd.encode())
         self.debug(f'Sent command: {cmd}')
 
-        response = self.conn.recv(400).strip()
-        self.debug(f'Response: {response}')
-        return self.parse(response.removesuffix(f',{cmd};'), cmd, handler)
+        res = self.conn.recv().strip()
+        self.debug(f'Response: {res}')
+
+        try:
+            assert res.endswith(';'), 'Invalid response format from Dobot.'
+            return self.parse(res.removesuffix(';'), cmd, handler)
+
+        except Exception as e:
+            self.error(f'Error parsing response: {e}')
+
+        finally:
+            self.warning('Returning empty response due to error.')
+            return []
 
     @staticmethod
-    def send(handler=None):
+    def send(resolver=None):
         def decorator(func):
             @wraps(func)
             def sender(self: 'Dobot', *args, **kwargs) -> DobotResponse:
@@ -219,18 +234,21 @@ class Dobot:
                     self.error(f'Invalid return type for {func_name}: {return_type}')
                     raise TypeError(f'Invalid return type for {func_name}: {return_type}')
 
-                return self.send_cmd(cmd)
+                return self.send_cmd(cmd, resolver)
 
             return sender
 
         return decorator
 
-    def debug(self, str: str) -> None:
+    def debug(self, msg: str) -> None:
         if self.isDebug:
-            print(f'[Dobot DEBUG] {str}')
+            print(f'[Dobot DEBUG] {msg}')
 
-    def error(self, str: str) -> None:
-        print(f'[Dobot ERROR] {str}')
+    def warning(self, msg: str) -> None:
+        print(f'[Dobot WARNING] {msg}')
+
+    def error(self, msg: str) -> None:
+        print(f'[Dobot ERROR] {msg}')
 
     def connect(self, timeout=None) -> None:
         try:

@@ -7,7 +7,7 @@ class UARTWrapper:
     def __init__(self, uart_id, baud=115200):
         """Initialize UART with given ID and baud rate."""
         self.uart = UART(uart_id, baud)
-        self.uart.init(baud, bits=8, parity=None, stop=1)
+        self.uart.init(baud)
 
         print(f'Initialized UARTController on UART{uart_id} at baud {baud}')
 
@@ -19,7 +19,7 @@ class UARTWrapper:
 
     def recv(self) -> str:
         """Receive data over UART."""
-        buf = self.uart.read()
+        buf = self.uart.readline()
 
         if not buf:
             return None
@@ -33,9 +33,9 @@ if __name__ == '__main__':
     uart.send(b'Hello UART from esp32!')
 
     uart.send(b'Testing UART communication.')
-    
+
     data = uart.recv()
-    
+
     print('data:', data)
 
     while True:
