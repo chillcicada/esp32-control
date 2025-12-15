@@ -9,93 +9,7 @@ from functools import wraps
 from inspect import signature
 from typing import List
 
-# region uart
-# import .uart
-from maix import pinmap, uart
-
-pinmap.set_pin_function('A29', 'UART2_RX')
-pinmap.set_pin_function('A28', 'UART2_TX')
-serial_esp = uart.UART('/dev/ttyS2', 115200)
-
-# endregion
-
-
-# region conn
-# from .conn import SerialConn, SocketConn
-class ConnStatus:
-    CONNECTED = True
-    DISCONNECTED = False
-
-
-class SocketConn:
-    def __init__(self):
-        self.conn = None
-        self.status = ConnStatus.DISCONNECTED
-
-    def connect(self, address) -> None:
-        import socket
-
-        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.conn.connect(address)
-
-        if self.conn:
-            self.status = ConnStatus.CONNECTED
-
-    def disconnect(self) -> None:
-        if self.conn:
-            self.conn.close()
-            self.conn = None
-            self.status = ConnStatus.DISCONNECTED
-
-    def send(self, data: bytes) -> None:
-        if self.conn:
-            self.conn.sendall(data + b'\n')
-
-    def recv(self, buffer_size=1024) -> str:
-        if self.conn:
-            # return self.conn.recv(buffer_size).decode()
-            return self.conn.recv(buffer_size).decode()
-        return ''
-
-    def settimeout(self, timeout: float) -> None:
-        if self.conn:
-            self.conn.settimeout(timeout)
-
-
-class SerialConn:
-    def __init__(self):
-        self.conn = None
-        self.status = ConnStatus.DISCONNECTED
-
-    def connect(self, address) -> None:
-        import serial
-
-        self.conn = serial.Serial(port=address, baudrate=115200)
-
-        if self.conn and self.conn.is_open:
-            self.status = ConnStatus.CONNECTED
-
-    def disconnect(self) -> None:
-        if self.status:
-            self.conn.close()
-            self.conn = None
-            self.status = ConnStatus.DISCONNECTED
-
-    def send(self, data: bytes) -> None:
-        if self.conn and self.conn.is_open:
-            self.conn.write(data + b'\n')
-
-    def recv(self) -> str:
-        if self.conn and self.conn.is_open:
-            return self.conn.readline().decode()
-        return ''
-
-    def settimeout(self, timeout: float) -> None:
-        if self.conn and self.conn.is_open:
-            self.conn.timeout = timeout
-
-
-# endregion
+from conn import SerialConn, SocketConn
 
 # Use type aliases for better readability
 DobotResponse = List
@@ -1092,13 +1006,20 @@ class Dobot:
 
 
 if __name__ == '__main__':
-    import time
+    from maix import pinmap, time, uart
 
+    # init UART2 for communication with embedded ESP32
+    pinmap.set_pin_function('A29', 'UART2_RX')
+    pinmap.set_pin_function('A28', 'UART2_TX')
+    serial_esp = uart.UART('/dev/ttyS2', 115200)
+
+    # define the positions
     P1 = [-180, -20, -110, -50, -60, 0]
     P2 = [-120, -20, -110, -50, -30, 0]
     P3 = [-150, -30, -100, -50, -60, 0]
     P4 = [-100, -30, -100, -50, -50, 0]
 
+    # below is a step-by-step example of using the Dobot class
     dobot = Dobot('/dev/ttyS0', isSerial=True)
 
     dobot.enable_debug()

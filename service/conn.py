@@ -27,8 +27,9 @@ class SocketConn:
         if self.conn:
             self.conn.sendall(data + b'\n')
 
-    def recv(self, buffer_size: int) -> str:
+    def recv(self, buffer_size=1024) -> str:
         if self.conn:
+            # return self.conn.recv(buffer_size).decode()
             return self.conn.recv(buffer_size).decode()
         return ''
 
@@ -43,6 +44,8 @@ class SerialConn:
         self.status = ConnStatus.DISCONNECTED
 
     def connect(self, address) -> None:
+        # here we can use the uart module from maix,
+        # but for universality, we use serial module
         import serial
 
         self.conn = serial.Serial(port=address, baudrate=115200)
@@ -60,9 +63,9 @@ class SerialConn:
         if self.conn and self.conn.is_open:
             self.conn.write(data + b'\n')
 
-    def recv(self, buffer_size: int) -> str:
+    def recv(self) -> str:
         if self.conn and self.conn.is_open:
-            return self.conn.read(buffer_size).decode()
+            return self.conn.readline().decode()
         return ''
 
     def settimeout(self, timeout: float) -> None:
