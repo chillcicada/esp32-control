@@ -1,3 +1,10 @@
+import queue
+import socket
+import threading
+
+from maix import uart
+
+
 class ConnStatus:
     CONNECTED = True
     DISCONNECTED = False
@@ -9,8 +16,6 @@ class SocketConn:
         self.status = ConnStatus.DISCONNECTED
 
     def connect(self, address) -> None:
-        import socket
-
         self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.conn.connect(address)
 
@@ -29,7 +34,6 @@ class SocketConn:
 
     def recv(self, buffer_size=1024) -> str:
         if self.conn:
-            # return self.conn.recv(buffer_size).decode()
             return self.conn.recv(buffer_size).decode()
         return ''
 
@@ -41,20 +45,33 @@ class SocketConn:
 class SerialConn:
     def __init__(self):
         self.conn = None
+        self.thread = None
+        self.data_queue = queue.Queue()
         self.status = ConnStatus.DISCONNECTED
 
     def connect(self, address) -> None:
         # here we can use the uart module from maix,
         # but for universality, we use serial module
-        import serial
 
-        self.conn = serial.Serial(port=address, baudrate=115200)
+        self.conn = uart.UART(port=address, baudrate=115200)
 
-        if self.conn and self.conn.is_open:
-            self.status = ConnStatus.CONNECTED
+        if not (self.conn and self.conn.is_open):
+            raise ConnectionError(f'Failed to open serial port: {address}')
+
+        self.status = ConnStatus.CONNECTED
+        self.thread = threading.Thread(target=self._read_loop, daemon=True)
+        self.thread.start()
+
+    def _read_loop(self):
+        while self.status == ConnStatus.CONNECTED:
+            byte = self.conn.read()
+            if not byte:
+                continue
+            self.data_queue.put(byte.decode())
 
     def disconnect(self) -> None:
         if self.status:
+            self.thread = None
             self.conn.close()
             self.conn = None
             self.status = ConnStatus.DISCONNECTED
@@ -64,9 +81,10 @@ class SerialConn:
             self.conn.write(data + b'\n')
 
     def recv(self) -> str:
-        if self.conn and self.conn.is_open:
-            return self.conn.readline().decode()
-        return ''
+        try:
+            return self.data_queue.get(True, 10)
+        except queue.Empty:
+            return ''
 
     def settimeout(self, timeout: float) -> None:
         if self.conn and self.conn.is_open:
@@ -77,9 +95,9 @@ if __name__ == '__main__':
     serial_conn = SerialConn()
     print('stage 1')
     serial_conn.connect('/dev/ttyS0')
-    serial_conn.settimeout(10)
     print('stage 2')
     serial_conn.send(b'DisableRobot()')
     print('stage 3')
-    response = serial_conn.recv(1024)
+    response = serial_conn.recv()
     print(f'Response: {response}')
+    serial_conn.disconnect()

@@ -1,15 +1,98 @@
-"""
-Dobot TCP Wrapper Based on Function Signatures
-
-@author: chillcicada
-@license: MIT
-"""
-
+import queue
+import socket
+import threading
 from functools import wraps
 from inspect import signature
 from typing import List
 
-from conn import SerialConn, SocketConn
+from maix import uart
+
+
+class ConnStatus:
+    CONNECTED = True
+    DISCONNECTED = False
+
+
+class SocketConn:
+    def __init__(self):
+        self.conn = None
+        self.status = ConnStatus.DISCONNECTED
+
+    def connect(self, address) -> None:
+        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.conn.connect(address)
+
+        if self.conn:
+            self.status = ConnStatus.CONNECTED
+
+    def disconnect(self) -> None:
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+            self.status = ConnStatus.DISCONNECTED
+
+    def send(self, data: bytes) -> None:
+        if self.conn:
+            self.conn.sendall(data + b'\n')
+
+    def recv(self, buffer_size=1024) -> str:
+        if self.conn:
+            return self.conn.recv(buffer_size).decode()
+        return ''
+
+    def settimeout(self, timeout: float) -> None:
+        if self.conn:
+            self.conn.settimeout(timeout)
+
+
+class SerialConn:
+    def __init__(self):
+        self.conn = None
+        self.thread = None
+        self.data_queue = queue.Queue()
+        self.status = ConnStatus.DISCONNECTED
+
+    def connect(self, address) -> None:
+        # here we can use the uart module from maix,
+        # but for universality, we use serial module
+
+        self.conn = uart.UART(port=address, baudrate=115200)
+
+        if not (self.conn and self.conn.is_open):
+            raise ConnectionError(f'Failed to open serial port: {address}')
+
+        self.status = ConnStatus.CONNECTED
+        self.thread = threading.Thread(target=self._read_loop, daemon=True)
+        self.thread.start()
+
+    def _read_loop(self):
+        while self.status == ConnStatus.CONNECTED:
+            byte = self.conn.read()
+            if not byte:
+                continue
+            self.data_queue.put(byte.decode())
+
+    def disconnect(self) -> None:
+        if self.status:
+            self.thread = None
+            self.conn.close()
+            self.conn = None
+            self.status = ConnStatus.DISCONNECTED
+
+    def send(self, data: bytes) -> None:
+        if self.conn and self.conn.is_open:
+            self.conn.write(data + b'\n')
+
+    def recv(self) -> str:
+        try:
+            return self.data_queue.get(True, 10)
+        except queue.Empty:
+            return ''
+
+    def settimeout(self, timeout: float) -> None:
+        if self.conn and self.conn.is_open:
+            self.conn.timeout = timeout
+
 
 # Use type aliases for better readability
 DobotResponse = List
@@ -90,14 +173,15 @@ class Dobot:
 
     def parse(self, res: str, cmd: str, handler=None) -> DobotResponse:
         func_name, _ = cmd.split('(', 1)
-        err, params_ = res.split(',{', 1)
-        params, _ = params_.split('},' + func_name, 1)
+        err, params_ = res.split(',', 1)
+        params, _ = params_.split(',' + func_name, 1)
 
         err = int(err)
+        params = params[1:-1]
         params = [float(p) if '.' in p else int(p) for p in params.split(',')] if params else []
         cmd = func_name + _
 
-        self.debug(f'Parsed error code: {err}; params: {params}; from command: {cmd}')
+        self.debug(f'Parsed error code: {err}; params: {params}.')
 
         return handler(err, params, cmd) if handler else self.resolve(err, params, cmd)
 
@@ -118,9 +202,6 @@ class Dobot:
 
         except Exception as e:
             self.error(f'Error parsing response: {e}')
-
-        finally:
-            self.warning('Returning empty response due to error.')
             return []
 
     @staticmethod
@@ -168,7 +249,8 @@ class Dobot:
         try:
             self.debug(f'Connecting to {self.address}')
             self.conn.connect(self.address)
-            self.conn.settimeout(timeout)
+            if timeout:
+                self.conn.settimeout(timeout)
             self.debug('Connection established.')
 
         except Exception as e:
@@ -1006,7 +1088,7 @@ class Dobot:
 
 
 if __name__ == '__main__':
-    from maix import pinmap, time, uart
+    from maix import pinmap, time
 
     # init UART2 for communication with embedded ESP32
     pinmap.set_pin_function('A29', 'UART2_RX')
@@ -1024,48 +1106,48 @@ if __name__ == '__main__':
 
     dobot.enable_debug()
 
-    dobot.connect(5)
+    dobot.connect()
 
     # dobot.ClearError()
 
-    # time.sleep(2)
+    # time.sleep(8)
 
-    dobot.EnableRobot(0.2, 0, 0, 0, 1)
+    # dobot.EnableRobot(0.2, 0, 0, 0, 1)
 
-    time.sleep(1)
+    dobot.Grab(False)
 
-    dobot.Pack()
+    time.sleep(8)
 
-    # dobot.Grab(False)
+    dobot.MovJJoint(P2)
 
-    # time.sleep(1)
+    time.sleep(8)
 
-    # dobot.MovJJoint(P2)
+    pose = dobot.RelPointUserJoint(P2, [0, 0, -30, 0, 0, 0])
 
-    # time.sleep(1)
+    time.sleep(8)
 
-    # pose = dobot.RelPointUserJoint(P2, [0, 0, -30, 0, 0, 0])
+    dobot.MovLPose(pose)
 
-    # dobot.MovLPose(pose)
+    time.sleep(8)
 
-    # time.sleep(1)
+    dobot.Grab(True)
 
-    # dobot.Grab(True)
+    time.sleep(8)
 
-    # time.sleep(1)
+    dobot.MovJJoint(P1)
 
-    # dobot.MovJJoint(P1)
+    time.sleep(8)
 
-    # pose = dobot.RelPointUserJoint(P1, [0, 0, 160, 0, 0, 0])
+    pose = dobot.RelPointUserJoint(P1, [0, 0, 160, 0, 0, 0])
 
-    # dobot.MovLPose(pose)
+    dobot.MovLPose(pose)
 
-    # time.sleep(2)
+    time.sleep(8)
 
-    # serial_esp.write(b'MIX\n')
+    serial_esp.write(b'MIX\n')
 
-    time.sleep(2)
+    time.sleep(4)
 
-    dobot.DisableRobot()
+    # dobot.DisableRobot()
 
     dobot.disconnect()
