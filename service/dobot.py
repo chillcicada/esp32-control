@@ -3,7 +3,6 @@ import socket
 import threading
 from functools import wraps
 from inspect import signature
-from typing import List
 
 from maix import uart
 
@@ -94,11 +93,6 @@ class SerialConn:
             self.conn.timeout = timeout
 
 
-# Use type aliases for better readability
-DobotResponse = List
-DobotResponse2 = List
-
-
 class DobotErrorCode:
     """Dobot error codes."""
 
@@ -130,7 +124,7 @@ class Dobot:
     # core functions used to communicate with Dobot
     # region core
 
-    def resolve(self, err: int, params: list, cmd: str) -> DobotResponse:
+    def resolve(self, err: int, params: list, cmd: str):
         if err == DobotErrorCode.SUCCESS:
             return params
 
@@ -171,7 +165,7 @@ class Dobot:
 
         return params
 
-    def parse(self, res: str, cmd: str, handler=None) -> DobotResponse:
+    def parse(self, res: str, cmd: str, resolver=None):
         func_name, _ = cmd.split('(', 1)
         err, params_ = res.split(',', 1)
         params, _ = params_.split(',' + func_name, 1)
@@ -183,9 +177,9 @@ class Dobot:
 
         self.debug(f'Parsed error code: {err}; params: {params}.')
 
-        return handler(err, params, cmd) if handler else self.resolve(err, params, cmd)
+        return resolver(err, params, cmd) if resolver else self.resolve(err, params, cmd)
 
-    def send_cmd(self, cmd: str, handler=None) -> DobotResponse:
+    def send_cmd(self, cmd: str, handler=None):
         if not self.conn.status:
             self.error('Not connected to Dobot.')
             raise ConnectionError('Not connected to Dobot.')
@@ -208,26 +202,18 @@ class Dobot:
     def send(resolver=None):
         def decorator(func):
             @wraps(func)
-            def sender(self: 'Dobot', *args, **kwargs) -> DobotResponse:
+            def sender(self: 'Dobot', *args, **kwargs):
                 sign = signature(func)
                 func_name = func.__name__
-                return_type = sign.return_annotation
 
-                if return_type == DobotResponse:
-                    bound = sign.bind(self, *args, **kwargs)
-                    bound.apply_defaults()
-                    params = [
-                        f'{k.removeprefix("_")}={v}' if k.startswith('_') else str(v)
-                        for k, v in bound.arguments.items()
-                        if k != 'self' and v is not None
-                    ]
-                    cmd = f'{func_name}({",".join(params)})'
-                elif return_type == DobotResponse2:
-                    params = func(self, *args, **kwargs)
-                    cmd = params
-                else:
-                    self.error(f'Invalid return type for {func_name}: {return_type}')
-                    raise TypeError(f'Invalid return type for {func_name}: {return_type}')
+                bound = sign.bind(self, *args, **kwargs)
+                bound.apply_defaults()
+                params = [
+                    f'{k.removeprefix("_")}={v}' if k.startswith('_') else str(v)
+                    for k, v in bound.arguments.items()
+                    if k != 'self' and v is not None
+                ]
+                cmd = f'{func_name}({",".join(params)})'
 
                 return self.send_cmd(cmd, resolver)
 
@@ -275,62 +261,62 @@ class Dobot:
     # region control
 
     @send()
-    def RequestControl(self) -> DobotResponse:
+    def RequestControl(self):
         pass
 
     @send()
-    def PowerON(self) -> DobotResponse:
+    def PowerON(self):
         pass
 
     @send()
     def EnableRobot(
         self,
-        load: float = None,
-        centerX: float = None,
-        centerY: float = None,
-        centerZ: float = None,
-        isCheck: int = None,
-    ) -> DobotResponse:
+        load: float | None = None,
+        centerX: float | None = None,
+        centerY: float | None = None,
+        centerZ: float | None = None,
+        isCheck: int | None = None,
+    ):
         pass
 
     @send()
-    def DisableRobot(self) -> DobotResponse:
+    def DisableRobot(self):
         pass
 
     @send()
-    def ClearError(self) -> DobotResponse:
+    def ClearError(self):
         pass
 
     @send()
-    def RunScript(self, projectName: str) -> DobotResponse:
+    def RunScript(self, projectName: str):
         pass
 
     @send()
-    def Stop(self) -> DobotResponse:
+    def Stop(self):
         pass
 
     @send()
-    def Pause(self) -> DobotResponse:
+    def Pause(self):
         pass
 
     @send()
-    def Continue(self) -> DobotResponse:
+    def Continue(self):
         pass
 
     @send()
-    def EmergencyStop(self, mode: str) -> DobotResponse:
+    def EmergencyStop(self, mode: str):
         pass
 
     @send()
-    def BrakeControl(self, axisID: int, value: int) -> DobotResponse:
+    def BrakeControl(self, axisID: int, value: int):
         pass
 
     @send()
-    def StartDrag(self) -> DobotResponse:
+    def StartDrag(self):
         pass
 
     @send()
-    def StopDrag(self) -> DobotResponse:
+    def StopDrag(self):
         pass
 
     # endregion
@@ -338,87 +324,89 @@ class Dobot:
     # region settings
 
     @send()
-    def SpeedFactor(self, ratio: int = 0) -> DobotResponse:
+    def SpeedFactor(self, ratio: int = 0):
         pass
 
     @send()
-    def User(self, index: int) -> DobotResponse:
+    def User(self, index: int):
         pass
 
     @send()
-    def SetUser(self, index: int, value: str, type: int = 0) -> DobotResponse:
+    def SetUser(self, index: int, value: str, type: int = 0):
         pass
 
     @send()
-    def CalcUser(self, index: int, matrix: int, offset: int) -> DobotResponse:
+    def CalcUser(self, index: int, matrix: int, offset: int):
         pass
 
     @send()
-    def Tool(self, index: int = 0) -> DobotResponse:
+    def Tool(self, index: int = 0):
         pass
 
     @send()
-    def SetTool(self, index: int, value: str, type: int = 0) -> DobotResponse:
+    def SetTool(self, index: int, value: str, type: int = 0):
         pass
 
     @send()
-    def CalcTool(self, index: int, matrix: int, offset: str) -> DobotResponse:
+    def CalcTool(self, index: int, matrix: int, offset: str):
         pass
 
     @send()
-    def SetPayload(self, load_or_name: str | float, x: float = None, y: float = None, z: float = None) -> DobotResponse:
+    def SetPayload(
+        self, load_or_name: str | float, x: float | None = None, y: float | None = None, z: float | None = None
+    ):
         pass
 
     @send()
-    def AccJ(self, R: int = 100) -> DobotResponse:
+    def AccJ(self, R: int = 100):
         pass
 
     @send()
-    def AccL(self, R: int = 100) -> DobotResponse:
+    def AccL(self, R: int = 100):
         pass
 
     @send()
-    def VelJ(self, R: int = 100) -> DobotResponse:
+    def VelJ(self, R: int = 100):
         pass
 
     @send()
-    def VelL(self, R: int = 100) -> DobotResponse:
+    def VelL(self, R: int = 100):
         pass
 
     @send()
-    def CP(self, R: int = 0) -> DobotResponse:
+    def CP(self, R: int = 0):
         pass
 
     @send()
-    def SetCollisionLevel(self, level: int) -> DobotResponse:
+    def SetCollisionLevel(self, level: int):
         pass
 
     @send()
-    def SetBackDistance(self, distance: float) -> DobotResponse:
+    def SetBackDistance(self, distance: float):
         pass
 
     @send()
-    def SetPostCollisionMode(self, mode: int) -> DobotResponse:
+    def SetPostCollisionMode(self, mode: int):
         pass
 
     @send()
-    def DragSensitivity(self, index: int, value: int) -> DobotResponse:
+    def DragSensitivity(self, index: int, value: int):
         pass
 
     @send()
-    def EnableSafeSkin(self, status: int) -> DobotResponse:
+    def EnableSafeSkin(self, status: int):
         pass
 
     @send()
-    def SetSafeSkin(self, part: int, status: int) -> DobotResponse:
+    def SetSafeSkin(self, part: int, status: int):
         pass
 
     @send()
-    def SetSafeWallEnable(self, index: int, value: int) -> DobotResponse:
+    def SetSafeWallEnable(self, index: int, value: int):
         pass
 
     @send()
-    def SetWorkZoneEnable(self, index: int, value: int) -> DobotResponse:
+    def SetWorkZoneEnable(self, index: int, value: int):
         pass
 
     # endregion
@@ -426,13 +414,13 @@ class Dobot:
     # region calculation
 
     @send()
-    def RobotMode(self) -> DobotResponse:
+    def RobotMode(self):
         pass
 
     @send()
     def PositiveKin(
         self, J1: float, J2: float, J3: float, J4: float, J5: float, J6: float, _user: int = 0, _tool: int = 0
-    ) -> DobotResponse:
+    ):
         pass
 
     @send()
@@ -448,35 +436,35 @@ class Dobot:
         _JointNear: str = '',
         _user: int = 0,
         _tool: int = 0,
-    ) -> DobotResponse:
+    ):
         pass
 
     @send()
-    def GetAngle(self) -> DobotResponse:
+    def GetAngle(self):
         pass
 
     @send()
-    def GetPose(self, _user: int = 0, _tool: int = 0) -> DobotResponse:
+    def GetPose(self, _user: int = 0, _tool: int = 0):
         pass
 
     @send()
-    def GetErrorID(self) -> DobotResponse:
+    def GetErrorID(self):
         pass
 
     @send()
-    def Create1DTray(self, Trayname: str, Count: str, Points: str) -> DobotResponse:
+    def Create1DTray(self, Trayname: str, Count: str, Points: str):
         pass
 
     @send()
-    def Create2DTray(self, Trayname: str, Count: str, Points: str) -> DobotResponse:
+    def Create2DTray(self, Trayname: str, Count: str, Points: str):
         pass
 
     @send()
-    def Create3DTray(self, Trayname: str, Count: str, Points: str) -> DobotResponse:
+    def Create3DTray(self, Trayname: str, Count: str, Points: str):
         pass
 
     @send()
-    def GetTrayPoint(self, Trayname: str, index: int) -> DobotResponse:
+    def GetTrayPoint(self, Trayname: str, index: int):
         pass
 
     # endregion
@@ -484,79 +472,79 @@ class Dobot:
     # region io
 
     @send()
-    def DO(self, index: int, status: int, time: int = None) -> DobotResponse:
+    def DO(self, index: int, status: int, time: int | None = None):
         pass
 
     @send()
-    def DOInstant(self, index: int, status: int) -> DobotResponse:
+    def DOInstant(self, index: int, status: int):
         pass
 
     @send()
-    def GetDO(self, index: int) -> DobotResponse:
+    def GetDO(self, index: int):
         pass
 
     @send()
-    def DOGroup(self, values: str) -> DobotResponse:
+    def DOGroup(self, values: str):
         pass
 
     @send()
-    def GetDOGroup(self, values: str) -> DobotResponse:
+    def GetDOGroup(self, values: str):
         pass
 
     @send()
-    def ToolDO(self, index: int, status: int) -> DobotResponse:
+    def ToolDO(self, index: int, status: int):
         pass
 
     @send()
-    def ToolDOInstant(self, index: int, status: int) -> DobotResponse:
+    def ToolDOInstant(self, index: int, status: int):
         pass
 
     @send()
-    def GetToolDO(self, index: int) -> DobotResponse:
+    def GetToolDO(self, index: int):
         pass
 
     @send()
-    def AO(self, index: int, value: int) -> DobotResponse:
+    def AO(self, index: int, value: int):
         pass
 
     @send()
-    def AOInstant(self, index: int, value: int) -> DobotResponse:
+    def AOInstant(self, index: int, value: int):
         pass
 
     @send()
-    def GetAO(self, index: int) -> DobotResponse:
+    def GetAO(self, index: int):
         pass
 
     @send()
-    def DI(self, index: int) -> DobotResponse:
+    def DI(self, index: int):
         pass
 
     @send()
-    def DIGroup(self, values: str) -> DobotResponse:
+    def DIGroup(self, values: str):
         pass
 
     @send()
-    def ToolDI(self, index: int) -> DobotResponse:
+    def ToolDI(self, index: int):
         pass
 
     @send()
-    def AI(self, index: int) -> DobotResponse:
+    def AI(self, index: int):
         pass
 
     @send()
-    def ToolAI(self, index: int) -> DobotResponse:
+    def ToolAI(self, index: int):
         pass
 
     @send()
-    def SetTool485(self, baud: int, parity: str = 'N', stopbit: int = 1, identify: int = None) -> DobotResponse:
+    def SetTool485(self, baud: int, parity: str = 'N', stopbit: int = 1, identify: int | None = None):
         pass
 
     @send()
-    def SetToolPower(self, status: int, identify: int = None) -> DobotResponse:
+    def SetToolPower(self, status: int, identify: int | None = None):
         pass
 
     @send()
-    def SetToolMode(self, mode: int, type: int, identify: int = None) -> DobotResponse:
+    def SetToolMode(self, mode: int, type: int, identify: int | None = None):
         pass
 
     # endregion
@@ -564,41 +552,39 @@ class Dobot:
     # region modbus
 
     @send()
-    def ModbusCreate(self, ip: str, port: int, slave_id: int, isRTU: int = None) -> DobotResponse:
+    def ModbusCreate(self, ip: str, port: int, slave_id: int, isRTU: int | None = None):
         pass
 
     @send()
-    def ModbusRTUCreate(
-        self, slave_id: int, baud: int, parity: str = 'E', data_bit: int = 8, stop_bit: int = 1
-    ) -> DobotResponse:
+    def ModbusRTUCreate(self, slave_id: int, baud: int, parity: str = 'E', data_bit: int = 8, stop_bit: int = 1):
         pass
 
     @send()
-    def ModbusClose(self, index: int) -> DobotResponse:
+    def ModbusClose(self, index: int):
         pass
 
     @send()
-    def GetInBits(self, index: int, address: int, count: int) -> DobotResponse:
+    def GetInBits(self, index: int, address: int, count: int):
         pass
 
     @send()
-    def GetInRegs(self, index: int, address: int, count: int, valType: str = 'U16') -> DobotResponse:
+    def GetInRegs(self, index: int, address: int, count: int, valType: str = 'U16'):
         pass
 
     @send()
-    def GetCoils(self, index: int, address: int, count: int) -> DobotResponse:
+    def GetCoils(self, index: int, address: int, count: int):
         pass
 
     @send()
-    def SetCoils(self, index: int, address: int, count: int, valTab: str) -> DobotResponse:
+    def SetCoils(self, index: int, address: int, count: int, valTab: str):
         pass
 
     @send()
-    def GetHoldRegs(self, index: int, address: int, count: int, valType: str = 'U16') -> DobotResponse:
+    def GetHoldRegs(self, index: int, address: int, count: int, valType: str = 'U16'):
         pass
 
     @send()
-    def setHoldRegs(self, index: int, address: int, count: int, valTab: str, valType: str = 'U16') -> DobotResponse:
+    def setHoldRegs(self, index: int, address: int, count: int, valTab: str, valType: str = 'U16'):
         pass
 
     # endregion
@@ -606,39 +592,39 @@ class Dobot:
     # region register
 
     @send()
-    def GetInputBool(self, adress: int) -> DobotResponse:
+    def GetInputBool(self, adress: int):
         pass
 
     @send()
-    def GetInputInt(self, adress: int) -> DobotResponse:
+    def GetInputInt(self, adress: int):
         pass
 
     @send()
-    def GetInputFloat(self, adress: int) -> DobotResponse:
+    def GetInputFloat(self, adress: int):
         pass
 
     @send()
-    def GetOutputBool(self, adress: int) -> DobotResponse:
+    def GetOutputBool(self, adress: int):
         pass
 
     @send()
-    def GetOutputInt(self, adress: int) -> DobotResponse:
+    def GetOutputInt(self, adress: int):
         pass
 
     @send()
-    def GetOutputFloat(self, adress: int) -> DobotResponse:
+    def GetOutputFloat(self, adress: int):
         pass
 
     @send()
-    def SetOutputBool(self, adress: int, value: int) -> DobotResponse:
+    def SetOutputBool(self, adress: int, value: int):
         pass
 
     @send()
-    def SetOutputInt(self, adress: int, value: int) -> DobotResponse:
+    def SetOutputInt(self, adress: int, value: int):
         pass
 
     @send()
-    def SetOutputFloat(self, adress: int, value: float) -> DobotResponse:
+    def SetOutputFloat(self, adress: int, value: float):
         pass
 
     # endregion
@@ -649,26 +635,26 @@ class Dobot:
     def MovJ(
         self,
         P: str,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _cp: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _cp: int | None = None,
+    ):
         pass
 
     @send()
     def MovL(
         self,
         P: str,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _speed: str = None,
-        _cp: int = None,
-        _r: str = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _speed: str | None = None,
+        _cp: int | None = None,
+        _r: str | None = None,
+    ):
         pass
 
     @send()
@@ -676,14 +662,14 @@ class Dobot:
         self,
         P: str,
         io: str,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _speed: int = None,
-        _cp: int = None,
-        _r: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _speed: int | None = None,
+        _cp: int | None = None,
+        _r: int | None = None,
+    ):
         pass
 
     @send()
@@ -691,12 +677,12 @@ class Dobot:
         self,
         P: str,
         io: str,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _cp: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _cp: int | None = None,
+    ):
         pass
 
     @send()
@@ -704,15 +690,15 @@ class Dobot:
         self,
         P1: str,
         P2: str,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _speed: int = None,
-        _cp: int = None,
-        _r: int = None,
-        ori_mode: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _speed: int | None = None,
+        _cp: int | None = None,
+        _r: int | None = None,
+        ori_mode: int | None = None,
+    ):
         pass
 
     @send()
@@ -721,14 +707,14 @@ class Dobot:
         P1: str,
         P2: str,
         count: int,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _speed: int = None,
-        _cp: int = None,
-        _r: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _speed: int | None = None,
+        _cp: int | None = None,
+        _r: int | None = None,
+    ):
         pass
 
     @send()
@@ -743,7 +729,7 @@ class Dobot:
         t: float = 0.1,
         aheadtime: float = 50,
         gain: float = 500,
-    ) -> DobotResponse:
+    ):
         pass
 
     @send()
@@ -758,11 +744,11 @@ class Dobot:
         t: float = 0.1,
         aheadtime: float = 50,
         gain: float = 500,
-    ) -> DobotResponse:
+    ):
         pass
 
     @send()
-    def MoveJog(self, axisID: str = None, _coordType: int = 0, _user: int = 0, _tool: int = 0) -> DobotResponse:
+    def MoveJog(self, axisID: str | None = None, _coordType: int = 0, _user: int = 0, _tool: int = 0):
         pass
 
     @send()
@@ -770,15 +756,15 @@ class Dobot:
         self,
         P: str,
         moveType: int,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+    ):
         pass
 
     @send()
-    def GetStartPose(self, traceName: str) -> DobotResponse:
+    def GetStartPose(self, traceName: str):
         pass
 
     @send()
@@ -791,7 +777,7 @@ class Dobot:
         _freq: float = 0.2,
         _user: int = 0,
         _tool: int = 0,
-    ) -> DobotResponse:
+    ):
         pass
 
     @send()
@@ -803,12 +789,12 @@ class Dobot:
         offsetRx: float,
         offsetRy: float,
         offsetRz: float,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _cp: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _cp: int | None = None,
+    ):
         pass
 
     @send()
@@ -820,14 +806,14 @@ class Dobot:
         offsetRx: float,
         offsetRy: float,
         offsetRz: float,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _speed: int = None,
-        _cp: int = None,
-        _r: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _speed: int | None = None,
+        _cp: int | None = None,
+        _r: int | None = None,
+    ):
         pass
 
     @send()
@@ -839,12 +825,12 @@ class Dobot:
         offsetRx: float,
         offsetRy: float,
         offsetRz: float,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _cp: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _cp: int | None = None,
+    ):
         pass
 
     @send()
@@ -856,14 +842,14 @@ class Dobot:
         offsetRx: float,
         offsetRy: float,
         offsetRz: float,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _speed: int = None,
-        _cp: int = None,
-        _r: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _speed: int | None = None,
+        _cp: int | None = None,
+        _r: int | None = None,
+    ):
         pass
 
     @send()
@@ -875,28 +861,28 @@ class Dobot:
         offset4: float,
         offset5: float,
         offset6: float,
-        _user: int = None,
-        _tool: int = None,
-        _a: int = None,
-        _v: int = None,
-        _cp: int = None,
-    ) -> DobotResponse:
+        _user: int | None = None,
+        _tool: int | None = None,
+        _a: int | None = None,
+        _v: int | None = None,
+        _cp: int | None = None,
+    ):
         pass
 
     @send()
-    def RelPointTool(self, P: str, offset: str) -> DobotResponse:
+    def RelPointTool(self, P: str, offset: str):
         pass
 
     @send()
-    def RelPointUser(self, P: str, offset: str) -> DobotResponse:
+    def RelPointUser(self, P: str, offset: str):
         pass
 
     @send()
-    def RelJoint(self, J1: float, J2: float, J3: float, J4: float, J5: float, J6: float, offset: str) -> DobotResponse:
+    def RelJoint(self, J1: float, J2: float, J3: float, J4: float, J5: float, J6: float, offset: str):
         pass
 
     @send()
-    def GetCurrentCommandID(self) -> DobotResponse:
+    def GetCurrentCommandID(self):
         pass
 
     # endregion
@@ -904,19 +890,19 @@ class Dobot:
     # region recovery
 
     @send()
-    def SetResumeOffset(self, distance: float) -> DobotResponse:
+    def SetResumeOffset(self, distance: float):
         pass
 
     @send()
-    def PathRecovery(self) -> DobotResponse:
+    def PathRecovery(self):
         pass
 
     @send()
-    def PathRecoveryStop(self) -> DobotResponse:
+    def PathRecoveryStop(self):
         pass
 
     @send()
-    def PathRecoveryStatus(self) -> DobotResponse:
+    def PathRecoveryStatus(self):
         pass
 
     # endregion
@@ -924,11 +910,11 @@ class Dobot:
     # region export
 
     @send()
-    def LogExportUSB(self, range: int) -> DobotResponse:
+    def LogExportUSB(self, range: int):
         pass
 
     @send()
-    def GetExportStatus(self) -> DobotResponse:
+    def GetExportStatus(self):
         pass
 
     # endregion
@@ -936,65 +922,59 @@ class Dobot:
     # region force
 
     @send()
-    def EnableFTSensor(self, status: int) -> DobotResponse:
+    def EnableFTSensor(self, status: int):
         pass
 
     @send()
-    def SixForceHome(self) -> DobotResponse:
+    def SixForceHome(self):
         pass
 
     @send()
-    def GetForce(self, tool: int = 0) -> DobotResponse:
+    def GetForce(self, tool: int = 0):
         pass
 
     @send()
-    def ForceDriveMode(self, control: str, _user: int = 0) -> DobotResponse:
+    def ForceDriveMode(self, control: str, _user: int = 0):
         pass
 
     @send()
-    def ForceDriveSpped(self, speed: int) -> DobotResponse:
+    def ForceDriveSpped(self, speed: int):
         pass
 
     @send()
-    def FCForceMode(
-        self, control: str, force: str, _reference: int = 0, _user: int = 0, _tool: int = 0
-    ) -> DobotResponse:
+    def FCForceMode(self, control: str, force: str, _reference: int = 0, _user: int = 0, _tool: int = 0):
         pass
 
     @send()
-    def FCSetDeviation(self, deviation: str, controltype: int = 0) -> DobotResponse:
+    def FCSetDeviation(self, deviation: str, controltype: int = 0):
         pass
 
     @send()
     def FCSetForceLimit(
         self, x: float = 500, y: float = 500, z: float = 500, rx: float = 50, ry: float = 50, rz: float = 50
-    ) -> DobotResponse:
+    ):
         pass
 
     @send()
-    def FCSetMass(
-        self, x: float = 20, y: float = 20, z: float = 20, rx: float = 0.5, ry: float = 0.5, rz: float = 0.5
-    ) -> DobotResponse:
+    def FCSetMass(self, x: float = 20, y: float = 20, z: float = 20, rx: float = 0.5, ry: float = 0.5, rz: float = 0.5):
         pass
 
     @send()
-    def FCSetDamping(
-        self, x: float = 50, y: float = 50, z: float = 50, rx: float = 20, ry: float = 20, rz: float = 20
-    ) -> DobotResponse:
+    def FCSetDamping(self, x: float = 50, y: float = 50, z: float = 50, rx: float = 20, ry: float = 20, rz: float = 20):
         pass
 
     @send()
-    def FCOff(self) -> DobotResponse:
+    def FCOff(self):
         pass
 
     @send()
     def FCSetForceSpeedLimit(
         self, x: float = 20, y: float = 20, z: float = 20, rx: float = 20, ry: float = 20, rz: float = 20
-    ) -> DobotResponse:
+    ):
         pass
 
     @send()
-    def FCSetForce(self, x: float, y: float, z: float, rx: float, ry: float, rz: float) -> DobotResponse:
+    def FCSetForce(self, x: float, y: float, z: float, rx: float, ry: float, rz: float):
         pass
 
     # endregion
@@ -1002,58 +982,58 @@ class Dobot:
     # ------------
     # region extra
 
-    def Grab(self, close: bool, length=None) -> DobotResponse:
+    def Grab(self, close: bool, length=None):
         return self.send_cmd(f'SetParallelGripper({length or 38 if close else 70})')
 
     def MovJJoint(
         self,
         jointList: list,
-        user: int = None,
-        tool: int = None,
-        a: int = None,
-        v: int = None,
-        cp: int = None,
-    ) -> DobotResponse:
+        user: int | None = None,
+        tool: int | None = None,
+        a: int | None = None,
+        v: int | None = None,
+        cp: int | None = None,
+    ):
         assert len(jointList) == 6, 'jointList must contain exactly 6 elements.'
         return self.MovJ(f'joint={{{",".join(map(str, jointList))}}}', user, tool, a, v, cp)
 
     def MovJPose(
         self,
         poseList: list,
-        user: int = None,
-        tool: int = None,
-        a: int = None,
-        v: int = None,
-        cp: int = None,
-    ) -> DobotResponse:
+        user: int | None = None,
+        tool: int | None = None,
+        a: int | None = None,
+        v: int | None = None,
+        cp: int | None = None,
+    ):
         assert len(poseList) == 6, 'poseList must contain exactly 6 elements.'
         return self.MovJ(f'pose={{{",".join(map(str, poseList))}}}', user, tool, a, v, cp)
 
     def MovLJoint(
         self,
         jointList: list,
-        user: int = None,
-        tool: int = None,
-        a: int = None,
-        v: int = None,
-        speed: str = None,
-        cp: int = None,
-        r: str = None,
-    ) -> DobotResponse:
+        user: int | None = None,
+        tool: int | None = None,
+        a: int | None = None,
+        v: int | None = None,
+        speed: str | None = None,
+        cp: int | None = None,
+        r: str | None = None,
+    ):
         assert len(jointList) == 6, 'jointList must contain exactly 6 elements.'
         return self.MovL(f'joint={{{",".join(map(str, jointList))}}}', user, tool, a, v, speed, cp, r)
 
     def MovLPose(
         self,
         poseList: list,
-        user: int = None,
-        tool: int = None,
-        a: int = None,
-        v: int = None,
-        speed: str = None,
-        cp: int = None,
-        r: str = None,
-    ) -> DobotResponse:
+        user: int | None = None,
+        tool: int | None = None,
+        a: int | None = None,
+        v: int | None = None,
+        speed: str | None = None,
+        cp: int | None = None,
+        r: str | None = None,
+    ):
         assert len(poseList) == 6, 'poseList must contain exactly 6 elements.'
         return self.MovL(f'pose={{{",".join(map(str, poseList))}}}', user, tool, a, v, speed, cp, r)
 
@@ -1061,7 +1041,7 @@ class Dobot:
         self,
         jointList: list,
         offsetList: list,
-    ) -> DobotResponse:
+    ):
         assert len(jointList) == 6, 'jointList must contain exactly 6 elements.'
         assert len(offsetList) == 6, 'offsetList must contain exactly 6 elements.'
         return self.RelPointUser(f'joint={{{",".join(map(str, jointList))}}}', f'{{{",".join(map(str, offsetList))}}}')
@@ -1070,18 +1050,18 @@ class Dobot:
         self,
         poseList: list,
         offsetList: list,
-    ) -> DobotResponse:
+    ):
         assert len(poseList) == 6, 'poseList must contain exactly 6 elements.'
         assert len(offsetList) == 6, 'offsetList must contain exactly 6 elements.'
         return self.RelPointUser(f'pose={{{",".join(map(str, poseList))}}}', f'{{{",".join(map(str, offsetList))}}}')
 
-    def Home(self) -> DobotResponse:
+    def Home(self):
         return self.MovJJoint([0, 0, 0, 0, 0, 0])
 
-    def Pack(self) -> DobotResponse:
+    def Pack(self):
         return self.MovJJoint([-90, 0, -140, -40, 0, 0])
 
-    def Stay(self) -> DobotResponse:
+    def Stay(self):
         return self.MovJJoint([0, 0, 90, 0, 90, 0])
 
     # endregion
