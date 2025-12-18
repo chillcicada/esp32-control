@@ -105,12 +105,16 @@ if __name__ == '__main__':
     # Example usage of StepperMotor
     stepper_motor = StepperMotor(2, 4)
 
-    delay_up = stepper_motor.set_rpm(100)
-    stepper_motor.step(2000, delay_up, StepperDirection.UP)
-    time.sleep(1)
+    # delay_up = stepper_motor.set_rpm(100)
+    # stepper_motor.step(2000, delay_up, StepperDirection.UP)
+    # time.sleep(1)
 
-    delay_down = stepper_motor.set_rpm(100)
-    stepper_motor.step(2000, delay_down, StepperDirection.DOWN)
+    # delay_down = stepper_motor.set_rpm(8)
+    # stepper_motor.step(8, delay_down, StepperDirection.DOWN)
+    # time.sleep(1)
+
+    delay_down = stepper_motor.set_rpm(10)
+    stepper_motor.step(100, delay_down, StepperDirection.DOWN)
     time.sleep(1)
 
     # # Example usage of MixingMotor

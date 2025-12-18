@@ -7,6 +7,8 @@ from inspect import signature
 from maix import uart
 
 
+# from conn import ConnStatus, SocketConn, SerialConn
+# region conn
 class ConnStatus:
     CONNECTED = True
     DISCONNECTED = False
@@ -30,22 +32,19 @@ class SocketConn:
             self.conn = None
             self.status = ConnStatus.DISCONNECTED
 
-    def send(self, data: bytes) -> None:
+    def send(self, data: str) -> None:
         if self.conn:
-            self.conn.sendall(data + b'\n')
+            self.conn.sendall(data.encode() + b'\n')
 
     def recv(self, buffer_size=1024) -> str:
         if self.conn:
             return self.conn.recv(buffer_size).decode()
         return ''
 
-    def settimeout(self, timeout: float) -> None:
-        if self.conn:
-            self.conn.settimeout(timeout)
-
 
 class SerialConn:
-    def __init__(self):
+    def __init__(self, name):
+        self.name = name
         self.conn = None
         self.thread = None
         self.data_queue = queue.Queue()
@@ -65,32 +64,40 @@ class SerialConn:
         self.thread.start()
 
     def _read_loop(self):
-        while self.status == ConnStatus.CONNECTED:
+        while self.status == ConnStatus.CONNECTED and self.conn:
             byte = self.conn.read()
             if not byte:
                 continue
             self.data_queue.put(byte.decode())
 
     def disconnect(self) -> None:
-        if self.status:
+        if self.conn and self.status:
             self.thread = None
             self.conn.close()
             self.conn = None
             self.status = ConnStatus.DISCONNECTED
 
-    def send(self, data: bytes) -> None:
+    def send(self, data: str) -> None:
         if self.conn and self.conn.is_open:
-            self.conn.write(data + b'\n')
+            self.conn.write(data.encode() + b'\n')
+
+        print(f'-- [I] [Camera] --> [{self.name}] {data}')
 
     def recv(self) -> str:
         try:
-            return self.data_queue.get(True, 10)
+            data = self.data_queue.get(True, 10)
+
+            if not data:
+                return ''
+
+            data = data.strip()
+            print(f'-- [I] [Camera] <-- [{self.name}] {data}')
+            return data
         except queue.Empty:
             return ''
 
-    def settimeout(self, timeout: float) -> None:
-        if self.conn and self.conn.is_open:
-            self.conn.timeout = timeout
+
+# endregion
 
 
 class DobotErrorCode:
@@ -116,9 +123,10 @@ class DobotErrorCode:
 
 
 class Dobot:
-    def __init__(self, address, isSerial: bool = False):
+    def __init__(self, address, isSerial: bool = False, name='Dobot'):
         self.address = address
-        self.conn = SerialConn() if isSerial else SocketConn()
+        self.name = name
+        self.conn = SerialConn(name) if isSerial else SocketConn()
         self.isDebug = False
 
     # core functions used to communicate with Dobot
@@ -126,7 +134,10 @@ class Dobot:
 
     def resolve(self, err: int, params: list, cmd: str):
         if err == DobotErrorCode.SUCCESS:
+            self.debug(f'Get Params: {params}')
             return params
+
+        self.debug(f'Error Code {err} with `{cmd}`')
 
         if err < DobotErrorCode.OPT_PARAM_OVER_RANGE:
             self.error(f'Optional parameter at {DobotErrorCode.OPT_PARAM_OVER_RANGE - err} in {cmd} out of range.')
@@ -167,28 +178,24 @@ class Dobot:
 
     def parse(self, res: str, cmd: str, resolver=None):
         func_name, _ = cmd.split('(', 1)
-        err, params_ = res.split(',', 1)
-        params, _ = params_.split(',' + func_name, 1)
-
+        err, params_ = res.split(',{', 1)
+        params, _ = params_.split('},' + func_name, 1)
+        
         err = int(err)
-        params = params[1:-1]
+        # params = params[1:-1]
         params = [float(p) if '.' in p else int(p) for p in params.split(',')] if params else []
         cmd = func_name + _
-
-        self.debug(f'Parsed error code: {err}; params: {params}.')
 
         return resolver(err, params, cmd) if resolver else self.resolve(err, params, cmd)
 
     def send_cmd(self, cmd: str, handler=None):
-        if not self.conn.status:
+        if not (self.conn and self.conn.status):
             self.error('Not connected to Dobot.')
             raise ConnectionError('Not connected to Dobot.')
 
-        self.conn.send(cmd.encode())
-        self.debug(f'Sent command: {cmd}')
+        self.conn.send(cmd)
 
-        res = self.conn.recv().strip()
-        self.debug(f'Response: {res}')
+        res = self.conn.recv()
 
         try:
             assert res.endswith(';'), 'Invalid response format from Dobot.'
@@ -221,37 +228,45 @@ class Dobot:
 
         return decorator
 
-    def debug(self, msg: str) -> None:
+    def info(self, msg: str, supply='') -> None:
+        supply = f'{supply or self.name}'
+        print(f'-- [I] [{supply:^18}] {msg}')
+
+    def debug(self, msg: str, supply='') -> None:
         if self.isDebug:
-            print(f'[Dobot DEBUG] {msg}')
+            supply = f'{supply or self.name}'
+            print(f'-- [D] [{supply:^18}] {msg}')
 
-    def warning(self, msg: str) -> None:
-        print(f'[Dobot WARNING] {msg}')
+    def warning(self, msg: str, supply='') -> None:
+        supply = f'{supply or self.name}'
+        print(f'-- [W] [{supply:^18}] {msg}')
 
-    def error(self, msg: str) -> None:
-        print(f'[Dobot ERROR] {msg}')
+    def error(self, msg: str, supply='') -> None:
+        supply = f'{supply or self.name}'
+        print(f'-- [E] [{supply:^18}] {msg}')
 
-    def connect(self, timeout=None) -> None:
+    def connect(self) -> None:
+        if not self.conn:
+            raise ConnectionError('Conn is not prepared!')
+
         try:
-            self.debug(f'Connecting to {self.address}')
+            self.info(f'Connecting to {self.address}')
             self.conn.connect(self.address)
-            if timeout:
-                self.conn.settimeout(timeout)
-            self.debug('Connection established.')
+            self.info('Connection established.')
 
         except Exception as e:
             self.error(f'Connection failed: {e}')
             self.conn = None
 
     def disconnect(self) -> None:
-        if not self.conn.status:
+        if not (self.conn and self.conn.status):
             self.debug('No active connection to disconnect.')
             return
 
-        self.debug('Disconnecting...')
+        self.info('Disconnecting...')
         self.conn.disconnect()
         self.conn = None
-        self.debug('Disconnected.')
+        self.info('Disconnected.')
 
     def enable_debug(self) -> None:
         self.isDebug = True
@@ -978,8 +993,8 @@ class Dobot:
         pass
 
     # endregion
-    # self-defined functions for easier usage can be added below
     # ------------
+    # self-defined functions for easier usage can be added below
     # region extra
 
     def Grab(self, close: bool, length=None):
@@ -1070,64 +1085,143 @@ class Dobot:
 if __name__ == '__main__':
     from maix import pinmap, time
 
+    # init UART0 for communication with dobot arm
+    dobot = Dobot('/dev/ttyS0', isSerial=True)
+    dobot.enable_debug()
+
+    dobot.connect()
+    time.sleep(1)
+
     # init UART2 for communication with embedded ESP32
     pinmap.set_pin_function('A29', 'UART2_RX')
     pinmap.set_pin_function('A28', 'UART2_TX')
-    serial_esp = uart.UART('/dev/ttyS2', 115200)
+    esp = SerialConn('ESP32')
+    esp.connect('/dev/ttyS2')
+
+    esp.send('START')
+    handle = esp.recv()
+
+    if handle == 'READY':
+        dobot.info(f'{esp.name} ready', esp.name)
+    else:
+        dobot.warning(f'Not recv from {esp.name}', esp.name)
+        raise ConnectionError('ESP32 is not prepared.')
 
     # define the positions
     P1 = [-180, -20, -110, -50, -60, 0]
     P2 = [-120, -20, -110, -50, -30, 0]
     P3 = [-150, -30, -100, -50, -60, 0]
-    P4 = [-100, -30, -100, -50, -50, 0]
+    P4 = [-100, -30, -100, -50, -10, 0]
+    P5 = [-80, -30, -100, -50, 10, 0]
 
     # below is a step-by-step example of using the Dobot class
-    dobot = Dobot('/dev/ttyS0', isSerial=True)
 
-    dobot.enable_debug()
+    dobot.ClearError()
+    time.sleep(1)
 
-    dobot.connect()
+    dobot.EnableRobot(0.2, 0, 0, 0, 1)
+    time.sleep(1)
 
-    # dobot.ClearError()
-
-    # time.sleep(8)
-
-    # dobot.EnableRobot(0.2, 0, 0, 0, 1)
+    dobot.SpeedFactor(25)
+    time.sleep(1)
 
     dobot.Grab(False)
 
-    time.sleep(8)
+    dobot.MovJJoint(P5)
+    time.sleep(2)
 
-    dobot.MovJJoint(P2)
-
-    time.sleep(8)
-
-    pose = dobot.RelPointUserJoint(P2, [0, 0, -30, 0, 0, 0])
-
-    time.sleep(8)
-
+    pose = dobot.RelPointUserJoint(P5, [0, 0, -25, 0, 0, 0])
     dobot.MovLPose(pose)
-
-    time.sleep(8)
+    time.sleep(1)
 
     dobot.Grab(True)
 
-    time.sleep(8)
+    dobot.MovLJoint(P5)
+    time.sleep(1)
 
     dobot.MovJJoint(P1)
-
-    time.sleep(8)
-
-    pose = dobot.RelPointUserJoint(P1, [0, 0, 160, 0, 0, 0])
-
-    dobot.MovLPose(pose)
-
-    time.sleep(8)
-
-    serial_esp.write(b'MIX\n')
-
     time.sleep(4)
 
-    # dobot.DisableRobot()
+    _counter = 0
+    while _counter <= 5:
+        _counter += 1
+
+        dobot.MovJJoint(P1)
+        time.sleep(1)
+
+        pose = dobot.RelPointUserJoint(P1, [0, 0, 160, 0, 0, 0])
+        dobot.MovLPose(pose)
+        time.sleep(1.5)
+
+        esp.send('DO_MIX')
+        handle = esp.recv()
+
+        if handle == 'MIX_START':
+            dobot.info('mixing start', 'Mixing Moter')
+            while True:
+                handle = esp.recv()
+                time.sleep_us(100)
+                if handle == 'MIX_DONE':
+                    dobot.info('mixing done', 'Mixing Moter')
+                    break
+        else:
+            dobot.warning(f'Not recv from {esp.name}', esp.name)
+
+        time.sleep(1)
+
+        dobot.MovLJoint(P1)
+        time.sleep(1)
+
+        dobot.MovJJoint(P2)
+        time.sleep(1)
+
+        pose = dobot.RelPointUserJoint(P2, [0, 0, 150, 0, 0, 0])
+        dobot.MovLPose(pose)
+        time.sleep(1.5)
+
+        esp.send('DO_INJECT')
+        handle = esp.recv()
+
+        if handle == 'INJECT_START':
+            dobot.info('injection start', 'Stepper Moter')
+            while True:
+                handle = esp.recv()
+                if handle.startswith("pH"):
+                    pass
+                elif handle == 'INJECT_DONE':
+                    dobot.info('injection done', 'Stepper Moter')
+                    break
+        else:
+            dobot.warning(f'Not recv from {esp.name}', esp.name)
+
+        time.sleep(1)
+
+        dobot.MovLJoint(P2)
+        time.sleep(1)
+
+    esp.send('DONE')
+    handle = esp.recv()
+
+    if handle == 'DONE':
+        dobot.info(f'{esp.name} done', esp.name)
+    else:
+        dobot.warning(f'Not recv from {esp.name}', esp.name)
+
+    dobot.MovLJoint(P2)
+    time.sleep(2)
+
+    pose = dobot.RelPointUserJoint(P2, [0, 0, -25, 0, 0, 0])
+    dobot.MovLPose(pose)
+    time.sleep(1)
+
+    dobot.Grab(False)
+
+    dobot.MovLJoint(P2)
+    time.sleep(2)
+
+    dobot.Pack()
+    time.sleep(4)
+
+    dobot.DisableRobot()
 
     dobot.disconnect()

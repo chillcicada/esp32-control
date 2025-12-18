@@ -85,8 +85,6 @@ class PHSensor:
         self.analog = ADC(Pin(pin_id))
         self.analog.init(atten=ADC.ATTN_11DB)  # Set full range to 3.3V
 
-        print('[WARNING] The ADC reading method is unstable. Consider using an external ADC for better accuracy.')
-
     def value(self):
         """Return the pH sensor value as voltage."""
         voltage = self.analog.read_uv() / 1e6

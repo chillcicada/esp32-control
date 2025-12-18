@@ -28,18 +28,15 @@ class SocketConn:
             self.conn = None
             self.status = ConnStatus.DISCONNECTED
 
-    def send(self, data: bytes) -> None:
+    def send(self, data: str) -> None:
         if self.conn:
-            self.conn.sendall(data + b'\n')
+            self.conn.sendall(data.encode() + b'\n')
 
     def recv(self, buffer_size=1024) -> str:
         if self.conn:
             return self.conn.recv(buffer_size).decode()
         return ''
 
-    def settimeout(self, timeout: float) -> None:
-        if self.conn:
-            self.conn.settimeout(timeout)
 
 
 class SerialConn:
@@ -63,22 +60,22 @@ class SerialConn:
         self.thread.start()
 
     def _read_loop(self):
-        while self.status == ConnStatus.CONNECTED:
+        while self.status == ConnStatus.CONNECTED and self.conn:
             byte = self.conn.read()
             if not byte:
                 continue
             self.data_queue.put(byte.decode())
 
     def disconnect(self) -> None:
-        if self.status:
+        if self.conn and self.status:
             self.thread = None
             self.conn.close()
             self.conn = None
             self.status = ConnStatus.DISCONNECTED
 
-    def send(self, data: bytes) -> None:
+    def send(self, data: str) -> None:
         if self.conn and self.conn.is_open:
-            self.conn.write(data + b'\n')
+            self.conn.write(data.encode() + b'\n')
 
     def recv(self) -> str:
         try:
@@ -86,17 +83,13 @@ class SerialConn:
         except queue.Empty:
             return ''
 
-    def settimeout(self, timeout: float) -> None:
-        if self.conn and self.conn.is_open:
-            self.conn.timeout = timeout
-
 
 if __name__ == '__main__':
     serial_conn = SerialConn()
     print('stage 1')
     serial_conn.connect('/dev/ttyS0')
     print('stage 2')
-    serial_conn.send(b'DisableRobot()')
+    serial_conn.send('DisableRobot()')
     print('stage 3')
     response = serial_conn.recv()
     print(f'Response: {response}')
