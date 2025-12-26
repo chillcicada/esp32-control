@@ -10,7 +10,7 @@ class UARTWrapper:
         self.uart = UART(uart_id, baud)
         self.uart.init(baud, bits=8, parity=None, stop=1)
 
-        print(f'Initialized UARTController on UART{uart_id} at baud {baud}')
+        print(f'Initializing UARTController on UART{uart_id} at baud {baud}')
 
     def send(self, data: str):
         """Send data over UART."""

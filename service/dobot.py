@@ -156,7 +156,8 @@ class Dobot:
                 self.ClearError()
                 time.sleep(1)
             case DobotErrorCode.EMERGENCY_STOP:
-                self.error('Emergency stop activated.')
+                self.error('Emergency stop activated, disconnect')
+                self.disconnect()
             case DobotErrorCode.POWER_OFF:
                 self.error('Power is off.')
             case DobotErrorCode.SCRIPT_RUNNING:
@@ -180,7 +181,7 @@ class Dobot:
         func_name, _ = cmd.split('(', 1)
         err, params_ = res.split(',{', 1)
         params, _ = params_.split('},' + func_name, 1)
-        
+
         err = int(err)
         # params = params[1:-1]
         params = [float(p) if '.' in p else int(p) for p in params.split(',')] if params else []
@@ -196,6 +197,10 @@ class Dobot:
         self.conn.send(cmd)
 
         res = self.conn.recv()
+
+        if res == 'Control Mode Is Not Tcp':
+            self.disconnect()
+            raise ConnectionError('Control mode is online mode instead of tcp mode, disconnect')
 
         try:
             assert res.endswith(';'), 'Invalid response format from Dobot.'
@@ -1098,6 +1103,12 @@ if __name__ == '__main__':
     esp = SerialConn('ESP32')
     esp.connect('/dev/ttyS2')
 
+    MAX_STEPS = 0
+    STEPPER_UP_RPM = 200
+    STEPPER_DOWN_RPM = 40
+
+    INIT_PH = 7.0
+
     esp.send('START')
     handle = esp.recv()
 
@@ -1108,50 +1119,152 @@ if __name__ == '__main__':
         raise ConnectionError('ESP32 is not prepared.')
 
     # define the positions
-    P1 = [-180, -20, -110, -50, -60, 0]
-    P2 = [-120, -20, -110, -50, -30, 0]
-    P3 = [-150, -30, -100, -50, -60, 0]
-    P4 = [-100, -30, -100, -50, -10, 0]
-    P5 = [-80, -30, -100, -50, 10, 0]
+    station_1 = [-170, -30, -90, -60, -80, 0]
+    station_2 = [-130, -30, -90, -60, -40, 0]
+
+    position_1 = [-160, -30, -80, -70, 20, 0]
+    position_2 = [-140, -30, -80, -70, -140, 0]
 
     # below is a step-by-step example of using the Dobot class
-
     dobot.ClearError()
-    time.sleep(1)
-
     dobot.EnableRobot(0.2, 0, 0, 0, 1)
     time.sleep(1)
 
-    dobot.SpeedFactor(25)
-    time.sleep(1)
-
+    dobot.SpeedFactor(40)
     dobot.Grab(False)
 
-    dobot.MovJJoint(P5)
+    dobot.MovJJoint(position_2)
     time.sleep(2)
 
-    pose = dobot.RelPointUserJoint(P5, [0, 0, -25, 0, 0, 0])
-    dobot.MovLPose(pose)
-    time.sleep(1)
+    dobot.RelMovLTool(0, -70, 0, 0, 0, 0)
+    time.sleep(2.5)
 
     dobot.Grab(True)
-
-    dobot.MovLJoint(P5)
+    dobot.MovLJoint(position_2)
     time.sleep(1)
 
-    dobot.MovJJoint(P1)
+    dobot.MovJJoint(station_2)
+    time.sleep(1)
+
+    dobot.RelMovLTool(0, 150, 0, 0, 0, 0)
+    time.sleep(3)
+
+    esp.send('GET_MAX_STEPS')
+    data_MAX_STEPS = esp.recv()
+    if not data_MAX_STEPS.startswith('MAX_STEPS'):
+        dobot.error('Invalid MAX_STEPS response from ESP32.')
+    MAX_STEPS = int(data_MAX_STEPS.split(':')[1])
+    dobot.info(f'Max steps from {esp.name}: {MAX_STEPS}', esp.name)
+
+    esp.send('DO_INJECT')
+    handle = esp.recv()
+
+    if handle == 'STEPPER_START':
+        dobot.info('Start', 'Stepper Moter')
+
+        esp.send(f'SET_STEPPER:{STEPPER_UP_RPM},4000,UP')
+
+        while True:
+            handle = esp.recv()
+            if handle.startswith('STEPPER_CONFIGURED'):
+                configured_params = handle.split(':', 1)[1]
+                dobot.info(f'Stepper configured: {configured_params}', 'Stepper Moter')
+            elif handle == 'STEPPER_CONFIG_INVALID' or handle == 'STEPPER_RECV_INVALID':
+                dobot.warning('Stepper configuration invalid', 'Stepper Moter')
+            elif handle == 'STEPPER_DONE':
+                dobot.info('Done', 'Stepper Moter')
+                break
+    else:
+        dobot.warning(f'Not recv from {esp.name}', esp.name)
+
     time.sleep(4)
 
-    _counter = 0
+    dobot.MovLJoint(station_2)
+    time.sleep(1)
+
+    dobot.MovJJoint(position_2)
+    time.sleep(1)
+
+    dobot.RelMovLTool(0, -70, 0, 0, 0, 0, _v=50)
+    time.sleep(3)
+
+    dobot.Grab(False)
+    dobot.MovLJoint(position_2)
+    time.sleep(1)
+
+    dobot.MovJJoint(station_2)
+    dobot.MovJJoint(position_1)
+    time.sleep(3)
+
+    dobot.RelMovLTool(0, -70, 0, 0, 0, 0)
+    time.sleep(3)
+    dobot.Grab(True)
+
+    dobot.MovLJoint(position_1)
+    time.sleep(1)
+
+    dobot.MovJJoint(station_1)
+    time.sleep(1)
+
+    dobot.RelMovLTool(0, 150, 0, 0, 0, 0)
+    time.sleep(3)
+
+    esp.send('GET_PH')
+    data_PH = esp.recv()
+    if not data_PH.startswith('pH'):
+        dobot.error('Invalid pH response from ESP32.')
+    INIT_PH = float(data_PH.split(':')[1])
+    dobot.info(f'Initial pH from {esp.name}: {INIT_PH}', esp.name)
+    time.sleep(4)
+
+    dobot.MovLJoint(station_1)
+    time.sleep(1)
+
+    _counter = 5
     while _counter <= 5:
         _counter += 1
 
-        dobot.MovJJoint(P1)
+        # INJECT
+
+        dobot.MovJJoint(station_2)
         time.sleep(1)
 
-        pose = dobot.RelPointUserJoint(P1, [0, 0, 160, 0, 0, 0])
-        dobot.MovLPose(pose)
-        time.sleep(1.5)
+        dobot.RelMovLTool(0, 80, 0, 0, 0, 0)
+        time.sleep(3)
+
+        esp.send('DO_INJECT')
+        handle = esp.recv()
+
+        if handle == 'STEPPER_START':
+            dobot.info('Start', 'Stepper Moter')
+
+            esp.send(f'SET_STEPPER:{STEPPER_DOWN_RPM},4000,DOWN')
+
+            while True:
+                handle = esp.recv()
+                if handle.startswith('STEPPER_CONFIGURED'):
+                    configured_params = handle.split(':', 1)[1]
+                    dobot.info(f'Stepper configured: {configured_params}', 'Stepper Moter')
+                elif handle == 'STEPPER_CONFIG_INVALID' or handle == 'STEPPER_RECV_INVALID':
+                    dobot.warning('Stepper configuration invalid', 'Stepper Moter')
+                elif handle == 'STEPPER_DONE':
+                    dobot.info('Done', 'Stepper Moter')
+                    break
+        else:
+            dobot.warning(f'Not recv from {esp.name}', esp.name)
+
+        time.sleep(4)
+
+        dobot.MovLJoint(station_2)
+        time.sleep(1)
+
+        # MIX
+
+        dobot.MovJJoint(station_1)
+        time.sleep(1)
+
+        dobot.RelMovLTool(0, 150, 0, 0, 0, 0)
+        time.sleep(3)
 
         esp.send('DO_MIX')
         handle = esp.recv()
@@ -1169,34 +1282,7 @@ if __name__ == '__main__':
 
         time.sleep(1)
 
-        dobot.MovLJoint(P1)
-        time.sleep(1)
-
-        dobot.MovJJoint(P2)
-        time.sleep(1)
-
-        pose = dobot.RelPointUserJoint(P2, [0, 0, 150, 0, 0, 0])
-        dobot.MovLPose(pose)
-        time.sleep(1.5)
-
-        esp.send('DO_INJECT')
-        handle = esp.recv()
-
-        if handle == 'INJECT_START':
-            dobot.info('injection start', 'Stepper Moter')
-            while True:
-                handle = esp.recv()
-                if handle.startswith("pH"):
-                    pass
-                elif handle == 'INJECT_DONE':
-                    dobot.info('injection done', 'Stepper Moter')
-                    break
-        else:
-            dobot.warning(f'Not recv from {esp.name}', esp.name)
-
-        time.sleep(1)
-
-        dobot.MovLJoint(P2)
+        dobot.MovLJoint(station_1)
         time.sleep(1)
 
     esp.send('DONE')
@@ -1207,21 +1293,19 @@ if __name__ == '__main__':
     else:
         dobot.warning(f'Not recv from {esp.name}', esp.name)
 
-    dobot.MovLJoint(P2)
+    dobot.MovJJoint(position_1)
     time.sleep(2)
 
-    pose = dobot.RelPointUserJoint(P2, [0, 0, -25, 0, 0, 0])
-    dobot.MovLPose(pose)
-    time.sleep(1)
+    dobot.RelMovLTool(0, -70, 0, 0, 0, 0, _v=50)
+    time.sleep(2)
 
     dobot.Grab(False)
-
-    dobot.MovLJoint(P2)
-    time.sleep(2)
+    dobot.MovLJoint(position_1)
+    time.sleep(1)
 
     dobot.Pack()
     time.sleep(4)
 
-    dobot.DisableRobot()
+    # dobot.DisableRobot()
 
     dobot.disconnect()

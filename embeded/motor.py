@@ -20,6 +20,8 @@ class StepperMotor:
         self.steps_per_rev = steps_per_rev
         self.current_position = 0
 
+        self.MAX_STEPS = 4000
+
         self.pul_pin.value(0)
         self.dir_pin.value(0)
 
@@ -71,6 +73,10 @@ class StepperMotor:
     def reset_position(self):
         """Reset the current position to zero."""
         self.current_position = 0
+
+    def get_max_steps(self):
+        """Get the maximum steps per revolution."""
+        return self.MAX_STEPS
 
 
 class MixingMotor:
