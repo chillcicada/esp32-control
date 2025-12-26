@@ -3,13 +3,13 @@ name = "control"
 version = "0.1.0"
 description = "Modern control program on ESP32 for Lesson 'Manufacturing Engineering Experience'"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14.2"
 dependencies = []
 
 [dependency-groups]
 dev = [
-  "maixpy>=4.12.1",
-  "micropython-esp32-esp32-generic-s2-stubs>=1.26.0.post1",
+  "maixpy>=4.12.4",
+  "micropython-esp32-esp32-generic-s2-stubs>=1.27.0.post1",
 ]
 
 [tool.ruff]
