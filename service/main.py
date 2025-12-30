@@ -1,6 +1,6 @@
 # from conn import SerialConn
 # from dobot import Dobot
-from maix import app, display, image, pinmap, time, touchscreen
+from maix import app, display, image, pinmap, touchscreen
 
 # init display and touchscreen
 disp = display.Display()
@@ -10,8 +10,11 @@ touch = touchscreen.TouchScreen()
 MAIX_CAM_WIDTH = disp.width()
 MAIX_CAM_HEIGHT = disp.height()
 
-GRID_WIDTH = MAIX_CAM_WIDTH // 4
-GRID_HEIGHT = MAIX_CAM_HEIGHT // 4
+GRID22_WIDTH = MAIX_CAM_WIDTH // 2
+GRID22_HEIGHT = MAIX_CAM_HEIGHT // 2
+
+GRID44_WIDTH = MAIX_CAM_WIDTH // 4
+GRID44_HEIGHT = MAIX_CAM_HEIGHT // 4
 
 # create screen image
 screen = image.Image(MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT)
@@ -42,9 +45,19 @@ input_ph_str = ''
 set_ph_val = -1.0
 get_ph_val = -1.0
 
+
 # define current state
-curr_state = 'INITING'
-prev_state = ''
+class State:
+    INIT = 'INIT'
+    HOME = 'HOME'
+    STEP = 'STEP'
+    EXEC = 'EXEC'
+    INPUT = 'INPUT'
+    MESSAGE = 'MESSAGE'
+
+
+curr_state = State.INIT
+prev_state = State.INIT
 
 # define touch state
 last_x = 0
@@ -53,32 +66,33 @@ last_pressed = 0
 
 # region btns
 
-# +-----+
-# +-----+
-# | btn |
-# +-----+
-# +-----+
+#    single
+# +---------+
+# | msg btn |
+# +---------+
 
 btn_msg_pos = [0, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT // 2]
 
+#     2x2 grid
 # +------+------+
 # | btn1 | btn2 |
 # +------+------+
 # | btn3 | btn4 |
 # +------+------+
 
-btn_lt_label = 'RUN'
+btn_lt_label = 'EXEC'
 btn_rt_label = 'STEP'
 btn_lb_label = 'MORE'
 btn_rb_label = 'EXIT'
 
-btn_lt_pos = [0, 0, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
-btn_rt_pos = [MAIX_CAM_WIDTH // 2, 0, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
-btn_lb_pos = [0, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
-btn_rb_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
+btn_lt_pos = [0, 0, GRID22_WIDTH, GRID22_HEIGHT]
+btn_rt_pos = [GRID22_WIDTH, 0, GRID22_WIDTH, GRID22_HEIGHT]
+btn_lb_pos = [0, GRID22_HEIGHT, GRID22_WIDTH, GRID22_HEIGHT]
+btn_rb_pos = [GRID22_WIDTH, GRID22_HEIGHT, GRID22_WIDTH, GRID22_HEIGHT]
 
+#          4x4 grid
 # +-----+-----+-----+-----+
-# |  << |           |  OK |
+# |  ×  |           |  ✓  |
 # +-----+-----+-----+-----+
 # |  1  |  2  |  3  |  4  |
 # +-----+-----+-----+-----+
@@ -87,49 +101,71 @@ btn_rb_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MA
 # |  9  |  0  |  .  | DEL |
 # +-----+-----+-----+-----+
 
-btn_back_pos = [0, 0, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_ok_pos = [MAIX_CAM_WIDTH * 3 // 4, 0, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_1_pos = [0, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_2_pos = [MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_3_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_4_pos = [MAIX_CAM_WIDTH * 3 // 4, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_5_pos = [0, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_6_pos = [MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_7_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_8_pos = [MAIX_CAM_WIDTH * 3 // 4, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_9_pos = [0, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_0_pos = [MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_dot_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
-btn_del_pos = [MAIX_CAM_WIDTH * 3 // 4, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_00_pos = [0, 0, GRID44_WIDTH, GRID44_HEIGHT]
+btn_01_pos = [GRID44_WIDTH, 0, GRID44_WIDTH, GRID44_HEIGHT]
+btn_02_pos = [GRID44_WIDTH * 2, 0, GRID44_WIDTH, GRID44_HEIGHT]
+btn_30_pos = [GRID44_WIDTH * 3, 0, GRID44_WIDTH, GRID44_HEIGHT]
+btn_01_pos = [0, GRID44_HEIGHT, GRID44_WIDTH, GRID44_HEIGHT]
+btn_11_pos = [GRID44_WIDTH, GRID44_HEIGHT, GRID44_WIDTH, GRID44_HEIGHT]
+btn_21_pos = [GRID44_WIDTH * 2, GRID44_HEIGHT, GRID44_WIDTH, GRID44_HEIGHT]
+btn_31_pos = [GRID44_WIDTH * 3, GRID44_HEIGHT, GRID44_WIDTH, GRID44_HEIGHT]
+btn_02_pos = [0, GRID44_HEIGHT * 2, GRID44_WIDTH, GRID44_HEIGHT]
+btn_12_pos = [GRID44_WIDTH, GRID44_HEIGHT * 2, GRID44_WIDTH, GRID44_HEIGHT]
+btn_22_pos = [GRID44_WIDTH * 2, GRID44_HEIGHT * 2, GRID44_WIDTH, GRID44_HEIGHT]
+btn_32_pos = [GRID44_WIDTH * 3, GRID44_HEIGHT * 2, GRID44_WIDTH, GRID44_HEIGHT]
+btn_03_pos = [0, GRID44_HEIGHT * 3, GRID44_WIDTH, GRID44_HEIGHT]
+btn_13_pos = [GRID44_WIDTH, GRID44_HEIGHT * 3, GRID44_WIDTH, GRID44_HEIGHT]
+btn_23_pos = [GRID44_WIDTH * 2, GRID44_HEIGHT * 3, GRID44_WIDTH, GRID44_HEIGHT]
+btn_33_pos = [GRID44_WIDTH * 3, GRID44_HEIGHT * 3, GRID44_WIDTH, GRID44_HEIGHT]
 
 # endregion
 
 
-def init_btns(scale=2):
-    draw_centered_text(btn_lt_label, scale=scale, offset_x=-MAIX_CAM_WIDTH // 4, offset_y=-MAIX_CAM_HEIGHT // 4)
-    draw_centered_text(btn_rt_label, scale=scale, offset_x=MAIX_CAM_WIDTH // 4, offset_y=-MAIX_CAM_HEIGHT // 4)
-    draw_centered_text(btn_lb_label, scale=scale, offset_x=-MAIX_CAM_WIDTH // 4, offset_y=MAIX_CAM_HEIGHT // 4)
-    draw_centered_text(btn_rb_label, scale=scale, offset_x=MAIX_CAM_WIDTH // 4, offset_y=MAIX_CAM_HEIGHT // 4)
+def draw_btns_home(scale=2):
+    draw_centered_text(btn_lt_label, scale=scale, offset_x=-GRID44_WIDTH, offset_y=-GRID44_HEIGHT)
+    draw_centered_text(btn_rt_label, scale=scale, offset_x=GRID44_WIDTH, offset_y=-GRID44_HEIGHT)
+    draw_centered_text(btn_lb_label, scale=scale, offset_x=-GRID44_WIDTH, offset_y=GRID44_HEIGHT)
+    draw_centered_text(btn_rb_label, scale=scale, offset_x=GRID44_WIDTH, offset_y=GRID44_HEIGHT)
 
 
-def init_input_btns(scale=2):
-    draw_centered_text('<<', scale=scale, offset_x=-GRID_WIDTH * 3 // 2, offset_y=-GRID_HEIGHT * 3 // 2)
-    draw_centered_text('OK', scale=scale, offset_x=GRID_WIDTH * 3 // 2, offset_y=-GRID_HEIGHT * 3 // 2)
+def draw_btns_input(scale=2):
+    draw_centered_text('×', scale=scale, offset_x=-GRID44_WIDTH * 3 // 2, offset_y=-GRID44_HEIGHT * 3 // 2)
+    draw_centered_text('✓', scale=scale, offset_x=GRID44_WIDTH * 3 // 2, offset_y=-GRID44_HEIGHT * 3 // 2)
 
-    draw_centered_text(input_ph_str or 'Input..', scale=scale, offset_y=-GRID_HEIGHT * 3 // 2)
+    draw_centered_text(input_ph_str or '<Input>', image.COLOR_WHITE, scale, offset_y=-GRID44_HEIGHT * 3 // 2)
 
-    draw_centered_text('1', scale=scale, offset_x=-GRID_WIDTH * 3 // 2, offset_y=-GRID_HEIGHT // 2)
-    draw_centered_text('2', scale=scale, offset_x=-GRID_WIDTH // 2, offset_y=-GRID_HEIGHT // 2)
-    draw_centered_text('3', scale=scale, offset_x=GRID_WIDTH // 2, offset_y=-GRID_HEIGHT // 2)
-    draw_centered_text('4', scale=scale, offset_x=GRID_WIDTH * 3 // 2, offset_y=-GRID_HEIGHT // 2)
-    draw_centered_text('5', scale=scale, offset_x=-GRID_WIDTH * 3 // 2, offset_y=GRID_HEIGHT // 2)
-    draw_centered_text('6', scale=scale, offset_x=-GRID_WIDTH // 2, offset_y=GRID_HEIGHT // 2)
-    draw_centered_text('7', scale=scale, offset_x=GRID_WIDTH // 2, offset_y=GRID_HEIGHT // 2)
-    draw_centered_text('8', scale=scale, offset_x=GRID_WIDTH * 3 // 2, offset_y=GRID_HEIGHT // 2)
-    draw_centered_text('9', scale=scale, offset_x=-GRID_WIDTH * 3 // 2, offset_y=GRID_HEIGHT * 3 // 2)
-    draw_centered_text('0', scale=scale, offset_x=-GRID_WIDTH // 2, offset_y=GRID_HEIGHT * 3 // 2)
-    draw_centered_text('·', scale=scale, offset_x=GRID_WIDTH // 2, offset_y=GRID_HEIGHT * 3 // 2)
-    draw_centered_text('DEL', scale=scale, offset_x=GRID_WIDTH * 3 // 2, offset_y=GRID_HEIGHT * 3 // 2)
+    draw_centered_text('1', scale=scale, offset_x=-GRID44_WIDTH * 3 // 2, offset_y=-GRID44_HEIGHT // 2)
+    draw_centered_text('2', scale=scale, offset_x=-GRID44_WIDTH // 2, offset_y=-GRID44_HEIGHT // 2)
+    draw_centered_text('3', scale=scale, offset_x=GRID44_WIDTH // 2, offset_y=-GRID44_HEIGHT // 2)
+    draw_centered_text('4', scale=scale, offset_x=GRID44_WIDTH * 3 // 2, offset_y=-GRID44_HEIGHT // 2)
+    draw_centered_text('5', scale=scale, offset_x=-GRID44_WIDTH * 3 // 2, offset_y=GRID44_HEIGHT // 2)
+    draw_centered_text('6', scale=scale, offset_x=-GRID44_WIDTH // 2, offset_y=GRID44_HEIGHT // 2)
+    draw_centered_text('7', scale=scale, offset_x=GRID44_WIDTH // 2, offset_y=GRID44_HEIGHT // 2)
+    draw_centered_text('8', scale=scale, offset_x=GRID44_WIDTH * 3 // 2, offset_y=GRID44_HEIGHT // 2)
+    draw_centered_text('9', scale=scale, offset_x=-GRID44_WIDTH * 3 // 2, offset_y=GRID44_HEIGHT * 3 // 2)
+    draw_centered_text('0', scale=scale, offset_x=-GRID44_WIDTH // 2, offset_y=GRID44_HEIGHT * 3 // 2)
+    draw_centered_text('·', scale=scale, offset_x=GRID44_WIDTH // 2, offset_y=GRID44_HEIGHT * 3 // 2)
+    draw_centered_text('DEL', scale=scale, offset_x=GRID44_WIDTH * 3 // 2, offset_y=GRID44_HEIGHT * 3 // 2)
+
+
+def draw_btns_step(scale=1.2):
+    draw_centered_text('×', scale=scale, offset_x=-GRID44_WIDTH * 3 // 2, offset_y=-GRID44_HEIGHT * 3 // 2)
+    draw_centered_text('✓', scale=scale, offset_x=GRID44_WIDTH * 3 // 2, offset_y=-GRID44_HEIGHT * 3 // 2)
+
+    draw_centered_text(input_ph_str or '<Input>', image.COLOR_WHITE, scale, offset_y=-GRID44_HEIGHT * 3 // 2)
+
+    draw_centered_text('1', scale=scale, offset_x=-GRID44_WIDTH * 3 // 2, offset_y=-GRID44_HEIGHT // 2)
+    draw_centered_text('2', scale=scale, offset_x=-GRID44_WIDTH // 2, offset_y=-GRID44_HEIGHT // 2)
+    draw_centered_text('3', scale=scale, offset_x=GRID44_WIDTH // 2, offset_y=-GRID44_HEIGHT // 2)
+    draw_centered_text('4', scale=scale, offset_x=GRID44_WIDTH * 3 // 2, offset_y=-GRID44_HEIGHT // 2)
+    draw_centered_text('5', scale=scale, offset_x=-GRID44_WIDTH * 3 // 2, offset_y=GRID44_HEIGHT // 2)
+    draw_centered_text('6', scale=scale, offset_x=-GRID44_WIDTH // 2, offset_y=GRID44_HEIGHT // 2)
+    draw_centered_text('7', scale=scale, offset_x=GRID44_WIDTH // 2, offset_y=GRID44_HEIGHT // 2)
+    draw_centered_text('8', scale=scale, offset_x=GRID44_WIDTH * 3 // 2, offset_y=GRID44_HEIGHT // 2)
+    draw_centered_text('9', scale=scale, offset_x=-GRID44_WIDTH * 3 // 2, offset_y=GRID44_HEIGHT * 3 // 2)
+    draw_centered_text('0', scale=scale, offset_x=-GRID44_WIDTH // 2, offset_y=GRID44_HEIGHT * 3 // 2)
+    draw_centered_text('·', scale=scale, offset_x=GRID44_WIDTH // 2, offset_y=GRID44_HEIGHT * 3 // 2)
+    draw_centered_text('DEL', scale=scale, offset_x=GRID44_WIDTH * 3 // 2, offset_y=GRID44_HEIGHT * 3 // 2)
 
 
 def is_in_btn(x, y, btn_pos):
@@ -139,75 +175,90 @@ def is_in_btn(x, y, btn_pos):
 def on_clicked_init(x, y):
     global curr_state
 
+    screen.clear()
+    draw_btns_home()
+    curr_state = State.HOME
+
+
+def on_clicked_home(x, y):
+    global curr_state, prev_state
+
     if is_in_btn(x, y, btn_lt_pos):
-        if btn_lt_label == 'RUN':
-            screen.clear()
-            init_input_btns()
-            curr_state = 'INPUT'
+        screen.clear()
+        draw_btns_input()
+        curr_state = State.INPUT
 
     elif is_in_btn(x, y, btn_rt_pos):
-        pass
+        screen.clear()
+        # todo
+        curr_state = State.STEP
 
     elif is_in_btn(x, y, btn_lb_pos):
         screen.clear()
         draw_centered_text('Made by Liu Kuan', image.COLOR_PURPLE, offset_y=-20)
         draw_centered_text('https://github.com/chillcicada', image.COLOR_GRAY, 0.8, offset_y=20)
-        curr_state = 'INITING'
-        pass
+        prev_state = curr_state
+        curr_state = State.MESSAGE
 
     elif is_in_btn(x, y, btn_rb_pos):
-        if btn_rb_label == 'EXIT':
-            app.set_exit_flag(True)
+        app.set_exit_flag(True)
 
 
 def on_clicked_input(x, y):
     global curr_state, input_ph_str
 
-    if is_in_btn(x, y, btn_back_pos):
+    if is_in_btn(x, y, btn_00_pos):
         screen.clear()
-        init_btns()
+        draw_btns_home()
         input_ph_str = ''
-        curr_state = 'INITED'
+        curr_state = State.HOME
         return
 
-    elif is_in_btn(x, y, btn_ok_pos):
+    elif is_in_btn(x, y, btn_30_pos):
         pass
 
-    elif is_in_btn(x, y, btn_1_pos):
+    elif is_in_btn(x, y, btn_01_pos):
         input_ph_str += '1'
-    elif is_in_btn(x, y, btn_2_pos):
+    elif is_in_btn(x, y, btn_11_pos):
         input_ph_str += '2'
-    elif is_in_btn(x, y, btn_3_pos):
+    elif is_in_btn(x, y, btn_21_pos):
         input_ph_str += '3'
-    elif is_in_btn(x, y, btn_4_pos):
+    elif is_in_btn(x, y, btn_31_pos):
         input_ph_str += '4'
-    elif is_in_btn(x, y, btn_5_pos):
+    elif is_in_btn(x, y, btn_02_pos):
         input_ph_str += '5'
-    elif is_in_btn(x, y, btn_6_pos):
+    elif is_in_btn(x, y, btn_12_pos):
         input_ph_str += '6'
-    elif is_in_btn(x, y, btn_7_pos):
+    elif is_in_btn(x, y, btn_22_pos):
         input_ph_str += '7'
-    elif is_in_btn(x, y, btn_8_pos):
+    elif is_in_btn(x, y, btn_32_pos):
         input_ph_str += '8'
-    elif is_in_btn(x, y, btn_9_pos):
+    elif is_in_btn(x, y, btn_03_pos):
         input_ph_str += '9'
-    elif is_in_btn(x, y, btn_0_pos):
+    elif is_in_btn(x, y, btn_13_pos):
         input_ph_str += '0'
-    elif is_in_btn(x, y, btn_dot_pos):
+    elif is_in_btn(x, y, btn_23_pos):
         input_ph_str += '.'
-    elif is_in_btn(x, y, btn_del_pos):
+    elif is_in_btn(x, y, btn_33_pos):
         if len(input_ph_str) > 0:
             input_ph_str = input_ph_str[:-1]
 
     if len(input_ph_str) <= 4:
         screen.draw_rect(0, 0, MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT * 3 // 4, image.COLOR_BLACK, -1)
-        init_input_btns()
+        draw_btns_input()
     else:
         pass
 
 
 def on_clicked_message(x, y):
-    pass
+    global curr_state, prev_state
+
+    screen.clear()
+    match prev_state:
+        case _:
+            draw_btns_home()
+
+    curr_state = prev_state
 
 
 # draw text at center
@@ -256,16 +307,11 @@ def draw_centered_rect(
     screen.draw_rect(pos_x, pos_y, w, h, color, thickness)
 
 
-def send_message(
-    text: str,
-    style: str = 'INFO',
-    color=image.COLOR_BLACK,
-    scale: int | float = 1,
-):
+def send_message(text: str, style: str = 'INFO', color=image.COLOR_BLACK, scale: int | float = 1):
     global prev_state, curr_state
 
     prev_state = curr_state
-    curr_state = 'MESSAGE'
+    curr_state = State.MESSAGE
 
     color_map = {'INFO': image.COLOR_BLUE, 'WARNING': image.COLOR_YELLOW, 'ERROR': image.COLOR_RED}
     box_color = color_map.get(style.upper(), image.COLOR_GRAY)
@@ -298,17 +344,14 @@ if __name__ == '__main__':
 
         if pressed and not last_pressed:
             last_pressed = pressed
-
             match curr_state:
-                case 'INITING':
-                    screen.clear()
-                    init_btns()
-                    curr_state = 'INITED'
-                case 'INITED':
+                case State.INIT:
                     on_clicked_init(x, y)
-                case 'INPUT':
+                case State.HOME:
+                    on_clicked_home(x, y)
+                case State.INPUT:
                     on_clicked_input(x, y)
-                case 'MESSAGE':
+                case State.MESSAGE:
                     on_clicked_message(x, y)
 
         elif not pressed:
