@@ -87,11 +87,7 @@ def is_in_btn(x, y, btn_pos):
 
 
 def on_clicked(x, y):
-    global current_state, is_in_pressed
-    if not is_in_pressed:
-        return
-
-    is_in_pressed = 0
+    global current_state
 
     if is_in_btn(x, y, btn_lt_pos):
         if btn_lt_label == 'RUN':
@@ -112,11 +108,7 @@ def on_clicked(x, y):
 
 
 def on_input_clicked(x, y):
-    global current_state, is_in_pressed, input_ph_str
-    if not is_in_pressed:
-        return
-
-    is_in_pressed = 0
+    global current_state, input_ph_str
 
     if is_in_btn(x, y, btn_back_pos):
         screen.clear()
@@ -216,19 +208,8 @@ if __name__ == '__main__':
     while not app.need_exit():
         x, y, pressed = touch.read()
 
-        if pressed != last_pressed:
-            # screen.clear()
-            # draw_centered_text('pH: 7.81', scale=3, color=image.COLOR_BLACK, box_thickness=-1, offset_y=-100)
-            # draw_centered_text('pH: 5.81', scale=3, offset_y=100)
-            # count += 1
-
-            last_x = x
-            last_y = y
+        if pressed and not last_pressed:
             last_pressed = pressed
-
-        if pressed:
-            is_in_pressed = 1
-        elif is_in_pressed:
             print(f'clicked at: {x}, {y}')
             match current_state:
                 case 'INITING':
@@ -240,6 +221,8 @@ if __name__ == '__main__':
                     on_clicked(x, y)
                 case 'INPUT':
                     on_input_clicked(x, y)
+        elif not pressed:
+            last_pressed = pressed
 
         # if count == 20:
         #     app.set_exit_flag(True)
