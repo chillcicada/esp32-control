@@ -1,4 +1,4 @@
-from maix import app, display, image, touchscreen
+from maix import app, display, image, time, touchscreen
 
 disp = display.Display()
 touch = touchscreen.TouchScreen()
@@ -12,6 +12,7 @@ screen = image.Image(MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT)
 image.load_font('Maple Mono', '/root/fonts/MapleMono-Regular.ttf', 40)
 image.set_default_font('Maple Mono')
 
+input_ph_str = ''
 current_state = 'INIT'
 
 # +-------------+
@@ -20,45 +21,128 @@ current_state = 'INIT'
 # | btn3 | btn4 |
 # +-------------+
 
-btn1_label = 'RUN'
-btn2_label = 'STEP'
-btn3_label = 'MORE'
-btn4_label = 'EXIT'
+btn_lt_label = 'RUN'
+btn_rt_label = 'STEP'
+btn_lb_label = 'MORE'
+btn_rb_label = 'EXIT'
 
-btn1_pos = [0, 0, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
-btn2_pos = [MAIX_CAM_WIDTH // 2, 0, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
-btn3_pos = [0, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
-btn4_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
+btn_lt_pos = [0, 0, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
+btn_rt_pos = [MAIX_CAM_WIDTH // 2, 0, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
+btn_lb_pos = [0, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
+btn_rb_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
+
+btn_back_pos = [0, 0, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_ok_pos = [MAIX_CAM_WIDTH * 3 // 4, 0, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_1_pos = [0, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_2_pos = [MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_3_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_4_pos = [MAIX_CAM_WIDTH * 3 // 4, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_5_pos = [0, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_6_pos = [MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_7_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_8_pos = [MAIX_CAM_WIDTH * 3 // 4, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_9_pos = [0, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_0_pos = [MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_dot_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+btn_del_pos = [MAIX_CAM_WIDTH * 3 // 4, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
 
 
-def init_btns():
-    draw_centered_text(
-        btn1_label,
-        scale=2,
-        offset_x=-MAIX_CAM_WIDTH // 4,
-        offset_y=-MAIX_CAM_HEIGHT // 4,
-    )
+def init_btns(scale=2):
+    draw_centered_text(btn_lt_label, scale=scale, offset_x=-MAIX_CAM_WIDTH // 4, offset_y=-MAIX_CAM_HEIGHT // 4)
+    draw_centered_text(btn_rt_label, scale=scale, offset_x=MAIX_CAM_WIDTH // 4, offset_y=-MAIX_CAM_HEIGHT // 4)
+    draw_centered_text(btn_lb_label, scale=scale, offset_x=-MAIX_CAM_WIDTH // 4, offset_y=MAIX_CAM_HEIGHT // 4)
+    draw_centered_text(btn_rb_label, scale=scale, offset_x=MAIX_CAM_WIDTH // 4, offset_y=MAIX_CAM_HEIGHT // 4)
 
-    draw_centered_text(
-        btn2_label,
-        scale=2,
-        offset_x=MAIX_CAM_WIDTH // 4,
-        offset_y=-MAIX_CAM_HEIGHT // 4,
-    )
 
-    draw_centered_text(
-        btn3_label,
-        scale=2,
-        offset_x=-MAIX_CAM_WIDTH // 4,
-        offset_y=MAIX_CAM_HEIGHT // 4,
-    )
+def init_input_btns(scale=2):
+    box_width = MAIX_CAM_WIDTH // 4
+    box_height = MAIX_CAM_HEIGHT // 4
 
-    draw_centered_text(
-        btn4_label,
-        scale=2,
-        offset_x=MAIX_CAM_WIDTH // 4,
-        offset_y=MAIX_CAM_HEIGHT // 4,
-    )
+    draw_centered_text('BACK', scale=scale, offset_x=-box_width * 3 // 2, offset_y=-box_height * 3 // 2)
+    draw_centered_text('OK', scale=scale, offset_x=box_width * 3 // 2, offset_y=-box_height * 3 // 2)
+
+    draw_centered_text(input_ph_str or 'Input pH...', image.COLOR_WHITE, scale=scale, offset_y=-box_height * 3 // 2)
+
+    draw_centered_text('1', scale=scale, offset_x=-box_width * 3 // 2, offset_y=-box_height // 2)
+    draw_centered_text('2', scale=scale, offset_x=-box_width // 2, offset_y=-box_height // 2)
+    draw_centered_text('3', scale=scale, offset_x=box_width // 2, offset_y=-box_height // 2)
+    draw_centered_text('4', scale=scale, offset_x=box_width * 3 // 2, offset_y=-box_height // 2)
+    draw_centered_text('5', scale=scale, offset_x=-box_width * 3 // 2, offset_y=box_height // 2)
+    draw_centered_text('6', scale=scale, offset_x=-box_width // 2, offset_y=box_height // 2)
+    draw_centered_text('7', scale=scale, offset_x=box_width // 2, offset_y=box_height // 2)
+    draw_centered_text('8', scale=scale, offset_x=box_width * 3 // 2, offset_y=box_height // 2)
+    draw_centered_text('9', scale=scale, offset_x=-box_width * 3 // 2, offset_y=box_height * 3 // 2)
+    draw_centered_text('0', scale=scale, offset_x=-box_width // 2, offset_y=box_height * 3 // 2)
+    draw_centered_text('·', scale=scale, offset_x=box_width // 2, offset_y=box_height * 3 // 2)
+    draw_centered_text('DEL', scale=scale, offset_x=box_width * 3 // 2, offset_y=box_height * 3 // 2)
+
+
+def is_in_btn(x, y, btn_pos):
+    return x >= btn_pos[0] and x <= btn_pos[0] + btn_pos[2] and y >= btn_pos[1] and y <= btn_pos[1] + btn_pos[3]
+
+
+def on_clicked(x, y):
+    global current_state
+    if current_state == 'INIT':
+        if is_in_btn(x, y, btn_lt_pos):
+            if btn_lt_label == 'RUN':
+                screen.clear()
+                init_input_btns()
+                current_state = 'INPUT'
+
+        elif is_in_btn(x, y, btn_rt_pos):
+            pass
+
+        elif is_in_btn(x, y, btn_lb_pos):
+            pass
+
+        elif is_in_btn(x, y, btn_rb_pos):
+            if btn_rb_label == 'EXIT':
+                app.set_exit_flag(True)
+
+
+def on_input_clicked(x, y):
+    global current_state, input_ph_str
+    if is_in_btn(x, y, btn_back_pos):
+        screen.clear()
+        init_btns()
+        input_ph_str = ''
+        current_state = 'INIT'
+
+    elif is_in_btn(x, y, btn_ok_pos):
+        pass
+
+    elif is_in_btn(x, y, btn_1_pos):
+        input_ph_str += '1'
+    elif is_in_btn(x, y, btn_2_pos):
+        input_ph_str += '2'
+    elif is_in_btn(x, y, btn_3_pos):
+        input_ph_str += '3'
+    elif is_in_btn(x, y, btn_4_pos):
+        input_ph_str += '4'
+    elif is_in_btn(x, y, btn_5_pos):
+        input_ph_str += '5'
+    elif is_in_btn(x, y, btn_6_pos):
+        input_ph_str += '6'
+    elif is_in_btn(x, y, btn_7_pos):
+        input_ph_str += '7'
+    elif is_in_btn(x, y, btn_8_pos):
+        input_ph_str += '8'
+    elif is_in_btn(x, y, btn_9_pos):
+        input_ph_str += '9'
+    elif is_in_btn(x, y, btn_0_pos):
+        input_ph_str += '0'
+    elif is_in_btn(x, y, btn_dot_pos):
+        input_ph_str += '.'
+    elif is_in_btn(x, y, btn_del_pos):
+        if len(input_ph_str) > 0:
+            input_ph_str = input_ph_str[:-1]
+
+    if len(input_ph_str) <= 4:
+        screen.clear()
+        init_input_btns()
+    else:
+        pass
 
 
 # draw text at center
@@ -107,32 +191,13 @@ def draw_centered_rect(
     screen.draw_rect(pos_x, pos_y, w, h, color, thickness)
 
 
-def is_in_btn(x, y, btn_pos):
-    return x >= btn_pos[0] and x <= btn_pos[0] + btn_pos[2] and y >= btn_pos[1] and y <= btn_pos[1] + btn_pos[3]
-
-
-def on_clicked(x, y):
-    if is_in_btn(x, y, btn1_pos):
-        pass
-
-    elif is_in_btn(x, y, btn2_pos):
-        pass
-
-    elif is_in_btn(x, y, btn3_pos):
-        pass
-
-    elif is_in_btn(x, y, btn4_pos):
-        if btn4_label == 'EXIT':
-            app.set_exit_flag(True)
-
-
 if __name__ == '__main__':
     draw_centered_text('Touch to start!', scale=1.5)
 
     last_x = 0
     last_y = 0
     last_pressed = 0
-    in_pressed = 0
+    is_in_pressed = 0
 
     # count = 0
 
@@ -145,8 +210,7 @@ if __name__ == '__main__':
             match current_state:
                 case 'INIT':
                     init_btns()
-                case _:
-                    pass
+                    time.sleep(0.1)
 
             # screen.clear()
             # draw_centered_text('pH: 7.81', scale=3, color=image.COLOR_BLACK, box_thickness=-1, offset_y=-100)
@@ -158,11 +222,14 @@ if __name__ == '__main__':
             last_pressed = pressed
 
         if pressed:
-            in_pressed = 1
-        elif in_pressed:
-                print(f'clicked at: ({x}, {y})')
-                on_clicked(x, y)
-                in_pressed = 0
+            is_in_pressed = 1
+        elif is_in_pressed:
+            match current_state:
+                case 'INIT':
+                    on_clicked(x, y)
+                case 'INPUT':
+                    on_input_clicked(x, y)
+            is_in_pressed = 0
 
         # if count == 20:
         #     app.set_exit_flag(True)
