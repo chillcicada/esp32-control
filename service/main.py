@@ -276,10 +276,12 @@ if __name__ == '__main__':
                     screen.clear()
                     init_btns()
                     current_state = 'INITED'
-                    time.sleep(0.5)
                 case 'INITED':
+                    screen.clear()
+                    init_btns()
                     on_clicked(x, y)
                 case 'INPUT':
+                    screen.clear()
                     on_input_clicked(x, y)
         elif not pressed:
             last_pressed = pressed
