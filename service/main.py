@@ -1,5 +1,5 @@
-from conn import SerialConn
-from dobot import Dobot
+# from conn import SerialConn
+# from dobot import Dobot
 from maix import app, display, image, pinmap, time, touchscreen
 
 # init display and touchscreen
@@ -22,12 +22,12 @@ image.load_font('Maple Mono', '/root/fonts/MapleMono-Regular.ttf', 40)
 image.set_default_font('Maple Mono')
 
 # init UART0 for communication with dobot arm
-dobot = Dobot('/dev/ttyS0', isSerial=True)
+# dobot = Dobot('/dev/ttyS0', isSerial=True)
 
 # init UART2 for communication with embedded ESP32
 pinmap.set_pin_function('A29', 'UART2_RX')
 pinmap.set_pin_function('A28', 'UART2_TX')
-esp = SerialConn('ESP32')
+# esp = SerialConn('ESP32')
 
 # define the positions for dobot arm
 station_1 = [-170, -30, -90, -60, -80, 0]
@@ -150,8 +150,8 @@ def on_clicked_init(x, y):
 
     elif is_in_btn(x, y, btn_lb_pos):
         screen.clear()
-        draw_centered_text('Made by Liu Kuan', offset_y=-100)
-        draw_centered_text('https://github.com/chillcicada', scale=0.8, offset_y=100)
+        draw_centered_text('Made by Liu Kuan', image.COLOR_PURPLE, offset_y=-20)
+        draw_centered_text('https://github.com/chillcicada', image.COLOR_GRAY, 0.8, offset_y=20)
         curr_state = 'INITING'
         pass
 
@@ -275,19 +275,19 @@ def send_message(
     draw_centered_text(text, color, scale)
 
 
-def init_dobot():
-    try:
-        dobot.connect()
-        time.sleep(1)
+# def init_dobot():
+#     try:
+#         dobot.connect()
+#         time.sleep(1)
 
-        dobot.ClearError()
-        dobot.EnableRobot(0.2, 0, 0, 0, 1)
-        time.sleep(1)
+#         dobot.ClearError()
+#         dobot.EnableRobot(0.2, 0, 0, 0, 1)
+#         time.sleep(1)
 
-        dobot.SpeedFactor(40)
-        dobot.Grab(False)
-    except Exception as _:
-        pass
+#         dobot.SpeedFactor(40)
+#         dobot.Grab(False)
+#     except Exception as _:
+#         pass
 
 
 if __name__ == '__main__':
