@@ -1,32 +1,71 @@
-from maix import app, display, image, time, touchscreen
+from conn import SerialConn
+from dobot import Dobot
+from maix import app, display, image, pinmap, time, touchscreen
 
+# init display and touchscreen
 disp = display.Display()
 touch = touchscreen.TouchScreen()
 
+# define constants
 MAIX_CAM_WIDTH = disp.width()
 MAIX_CAM_HEIGHT = disp.height()
 
 GRID_WIDTH = MAIX_CAM_WIDTH // 4
 GRID_HEIGHT = MAIX_CAM_HEIGHT // 4
 
+# create screen image
 screen = image.Image(MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT)
 
+# load and set default font
 # run `scp /path/to/MapleMono-Regular.ttf root@10.177.150.1:~/fonts` to upload font file
 image.load_font('Maple Mono', '/root/fonts/MapleMono-Regular.ttf', 40)
 image.set_default_font('Maple Mono')
 
-input_ph_str = ''
-current_state = 'INITING'
+# init UART0 for communication with dobot arm
+dobot = Dobot('/dev/ttyS0', isSerial=True)
 
+# init UART2 for communication with embedded ESP32
+pinmap.set_pin_function('A29', 'UART2_RX')
+pinmap.set_pin_function('A28', 'UART2_TX')
+esp = SerialConn('ESP32')
+
+# define the positions for dobot arm
+station_1 = [-170, -30, -90, -60, -80, 0]
+station_2 = [-130, -30, -90, -60, -40, 0]
+
+position_1 = [-160, -30, -80, -70, 20, 0]
+position_2 = [-140, -30, -80, -70, -140, 0]
+
+# define input state
+input_ph_str = ''
+
+set_ph_val = -1.0
+get_ph_val = -1.0
+
+# define current state
+curr_state = 'INITING'
+prev_state = ''
+
+# define touch state
 last_x = 0
 last_y = 0
 last_pressed = 0
 
-# +-------------+
+# region btns
+
+# +-----+
+# +-----+
+# | btn |
+# +-----+
+# +-----+
+
+btn_msg_pos = [0, MAIX_CAM_HEIGHT // 4, MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT // 2]
+
+# +------+------+
 # | btn1 | btn2 |
-# +-------------+
+# +------+------+
 # | btn3 | btn4 |
-# +-------------+
+# +------+------+
 
 btn_lt_label = 'RUN'
 btn_rt_label = 'STEP'
@@ -38,12 +77,15 @@ btn_rt_pos = [MAIX_CAM_WIDTH // 2, 0, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
 btn_lb_pos = [0, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
 btn_rb_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
 
-# +---+-------+---+
-# | <<|       | OK|
-# | 1 | 2 | 3 | 4 |
-# | 5 | 6 | 7 | 8 |
-# | 9 | 0 | . |DEL|
-# +---+-------+---+
+# +-----+-----+-----+-----+
+# |  << |           |  OK |
+# +-----+-----+-----+-----+
+# |  1  |  2  |  3  |  4  |
+# +-----+-----+-----+-----+
+# |  5  |  6  |  7  |  8  |
+# +-----+-----+-----+-----+
+# |  9  |  0  |  .  | DEL |
+# +-----+-----+-----+-----+
 
 btn_back_pos = [0, 0, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
 btn_ok_pos = [MAIX_CAM_WIDTH * 3 // 4, 0, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
@@ -59,6 +101,8 @@ btn_9_pos = [0, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT /
 btn_0_pos = [MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
 btn_dot_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
 btn_del_pos = [MAIX_CAM_WIDTH * 3 // 4, MAIX_CAM_HEIGHT * 3 // 4, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
+
+# endregion
 
 
 def init_btns(scale=2):
@@ -92,129 +136,78 @@ def is_in_btn(x, y, btn_pos):
     return x >= btn_pos[0] and x <= btn_pos[0] + btn_pos[2] and y >= btn_pos[1] and y <= btn_pos[1] + btn_pos[3]
 
 
-def on_clicked(x, y, scale=2):
-    global current_state
+def on_clicked_init(x, y):
+    global curr_state
 
     if is_in_btn(x, y, btn_lt_pos):
-        screen.draw_rect(*btn_lt_pos, image.COLOR_GRAY, -1)
-        draw_centered_text(btn_lt_label, image.COLOR_BLACK, scale, -MAIX_CAM_WIDTH // 4, -MAIX_CAM_HEIGHT // 4)
-        time.sleep(0.1)
-
         if btn_lt_label == 'RUN':
             screen.clear()
             init_input_btns()
-            current_state = 'INPUT'
+            curr_state = 'INPUT'
 
     elif is_in_btn(x, y, btn_rt_pos):
-        screen.draw_rect(*btn_rt_pos, image.COLOR_GRAY, -1)
-        draw_centered_text(btn_rt_label, image.COLOR_BLACK, scale, MAIX_CAM_WIDTH // 4, -MAIX_CAM_HEIGHT // 4)
-        time.sleep(0.1)
-
         pass
 
     elif is_in_btn(x, y, btn_lb_pos):
-        screen.draw_rect(*btn_lb_pos, image.COLOR_GRAY, -1)
-        draw_centered_text(btn_lb_label, image.COLOR_BLACK, scale, -MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4)
-        time.sleep(0.1)
-
+        screen.clear()
+        draw_centered_text('Made by Liu Kuan', offset_y=-100)
+        draw_centered_text('https://github.com/chillcicada', scale=0.8, offset_y=100)
+        curr_state = 'INITING'
         pass
 
     elif is_in_btn(x, y, btn_rb_pos):
-        screen.draw_rect(*btn_rb_pos, image.COLOR_GRAY, -1)
-        draw_centered_text(btn_rb_label, image.COLOR_BLACK, scale, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4)
-        time.sleep(0.1)
-
         if btn_rb_label == 'EXIT':
             app.set_exit_flag(True)
 
 
-def on_input_clicked(x, y):
-    global current_state, input_ph_str
+def on_clicked_input(x, y):
+    global curr_state, input_ph_str
 
     if is_in_btn(x, y, btn_back_pos):
-        screen.draw_rect(*btn_back_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('<<', image.COLOR_BLACK, 2, -GRID_WIDTH * 3 // 2, -GRID_HEIGHT * 3 // 2)
-        time.sleep(0.1)
-
         screen.clear()
         init_btns()
         input_ph_str = ''
-        current_state = 'INITED'
+        curr_state = 'INITED'
         return
 
     elif is_in_btn(x, y, btn_ok_pos):
-        screen.draw_rect(*btn_ok_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('OK', image.COLOR_BLACK, 2, GRID_WIDTH * 3 // 2, -GRID_HEIGHT * 3 // 2)
-        time.sleep(0.1)
         pass
 
     elif is_in_btn(x, y, btn_1_pos):
         input_ph_str += '1'
-        screen.draw_rect(*btn_1_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('1', image.COLOR_BLACK, 2, -GRID_WIDTH * 3 // 2, -GRID_HEIGHT // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_2_pos):
         input_ph_str += '2'
-        screen.draw_rect(*btn_2_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('2', image.COLOR_BLACK, 2, -GRID_WIDTH // 2, -GRID_HEIGHT // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_3_pos):
         input_ph_str += '3'
-        screen.draw_rect(*btn_3_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('3', image.COLOR_BLACK, 2, GRID_WIDTH // 2, -GRID_HEIGHT // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_4_pos):
         input_ph_str += '4'
-        screen.draw_rect(*btn_4_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('4', image.COLOR_BLACK, 2, GRID_WIDTH * 3 // 2, -GRID_HEIGHT // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_5_pos):
         input_ph_str += '5'
-        screen.draw_rect(*btn_5_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('5', image.COLOR_BLACK, 2, -GRID_WIDTH * 3 // 2, GRID_HEIGHT // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_6_pos):
         input_ph_str += '6'
-        screen.draw_rect(*btn_6_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('6', image.COLOR_BLACK, 2, -GRID_WIDTH // 2, GRID_HEIGHT // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_7_pos):
         input_ph_str += '7'
-        screen.draw_rect(*btn_7_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('7', image.COLOR_BLACK, 2, GRID_WIDTH // 2, GRID_HEIGHT // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_8_pos):
         input_ph_str += '8'
-        screen.draw_rect(*btn_8_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('8', image.COLOR_BLACK, 2, GRID_WIDTH * 3 // 2, GRID_HEIGHT // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_9_pos):
         input_ph_str += '9'
-        screen.draw_rect(*btn_9_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('9', image.COLOR_BLACK, 2, -GRID_WIDTH * 3 // 2, GRID_HEIGHT * 3 // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_0_pos):
         input_ph_str += '0'
-        screen.draw_rect(*btn_0_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('0', image.COLOR_BLACK, 2, -GRID_WIDTH // 2, GRID_HEIGHT * 3 // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_dot_pos):
         input_ph_str += '.'
-        screen.draw_rect(*btn_dot_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('·', image.COLOR_BLACK, 2, GRID_WIDTH // 2, GRID_HEIGHT * 3 // 2)
-        time.sleep(0.1)
     elif is_in_btn(x, y, btn_del_pos):
         if len(input_ph_str) > 0:
             input_ph_str = input_ph_str[:-1]
-        screen.draw_rect(*btn_del_pos, image.COLOR_GRAY, -1)
-        draw_centered_text('DEL', image.COLOR_BLACK, 2, GRID_WIDTH * 3 // 2, GRID_HEIGHT * 3 // 2)
-        time.sleep(0.1)
 
     if len(input_ph_str) <= 4:
         screen.draw_rect(0, 0, MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT * 3 // 4, image.COLOR_BLACK, -1)
         init_input_btns()
     else:
         pass
+
+
+def on_clicked_message(x, y):
+    pass
 
 
 # draw text at center
@@ -263,6 +256,40 @@ def draw_centered_rect(
     screen.draw_rect(pos_x, pos_y, w, h, color, thickness)
 
 
+def send_message(
+    text: str,
+    style: str = 'INFO',
+    color=image.COLOR_BLACK,
+    scale: int | float = 1,
+):
+    global prev_state, curr_state
+
+    prev_state = curr_state
+    curr_state = 'MESSAGE'
+
+    color_map = {'INFO': image.COLOR_BLUE, 'WARNING': image.COLOR_YELLOW, 'ERROR': image.COLOR_RED}
+    box_color = color_map.get(style.upper(), image.COLOR_GRAY)
+
+    screen.clear()
+    screen.draw_rect(*btn_msg_pos, box_color, -1)
+    draw_centered_text(text, color, scale)
+
+
+def init_dobot():
+    try:
+        dobot.connect()
+        time.sleep(1)
+
+        dobot.ClearError()
+        dobot.EnableRobot(0.2, 0, 0, 0, 1)
+        time.sleep(1)
+
+        dobot.SpeedFactor(40)
+        dobot.Grab(False)
+    except Exception as _:
+        pass
+
+
 if __name__ == '__main__':
     draw_centered_text('Touch to start!', scale=1.5)
 
@@ -271,18 +298,19 @@ if __name__ == '__main__':
 
         if pressed and not last_pressed:
             last_pressed = pressed
-            match current_state:
+
+            match curr_state:
                 case 'INITING':
                     screen.clear()
                     init_btns()
-                    current_state = 'INITED'
+                    curr_state = 'INITED'
                 case 'INITED':
-                    screen.clear()
-                    init_btns()
-                    on_clicked(x, y)
+                    on_clicked_init(x, y)
                 case 'INPUT':
-                    screen.clear()
-                    on_input_clicked(x, y)
+                    on_clicked_input(x, y)
+                case 'MESSAGE':
+                    on_clicked_message(x, y)
+
         elif not pressed:
             last_pressed = pressed
 
