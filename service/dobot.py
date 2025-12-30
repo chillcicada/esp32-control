@@ -1,103 +1,7 @@
-import queue
-import socket
-import threading
 from functools import wraps
 from inspect import signature
 
-from maix import uart
-
-
-# from conn import ConnStatus, SocketConn, SerialConn
-# region conn
-class ConnStatus:
-    CONNECTED = True
-    DISCONNECTED = False
-
-
-class SocketConn:
-    def __init__(self):
-        self.conn = None
-        self.status = ConnStatus.DISCONNECTED
-
-    def connect(self, address) -> None:
-        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.conn.connect(address)
-
-        if self.conn:
-            self.status = ConnStatus.CONNECTED
-
-    def disconnect(self) -> None:
-        if self.conn:
-            self.conn.close()
-            self.conn = None
-            self.status = ConnStatus.DISCONNECTED
-
-    def send(self, data: str) -> None:
-        if self.conn:
-            self.conn.sendall(data.encode() + b'\n')
-
-    def recv(self, buffer_size=1024) -> str:
-        if self.conn:
-            return self.conn.recv(buffer_size).decode()
-        return ''
-
-
-class SerialConn:
-    def __init__(self, name):
-        self.name = name
-        self.conn = None
-        self.thread = None
-        self.data_queue = queue.Queue()
-        self.status = ConnStatus.DISCONNECTED
-
-    def connect(self, address) -> None:
-        # here we can use the uart module from maix,
-        # but for universality, we use serial module
-
-        self.conn = uart.UART(port=address, baudrate=115200)
-
-        if not (self.conn and self.conn.is_open):
-            raise ConnectionError(f'Failed to open serial port: {address}')
-
-        self.status = ConnStatus.CONNECTED
-        self.thread = threading.Thread(target=self._read_loop, daemon=True)
-        self.thread.start()
-
-    def _read_loop(self):
-        while self.status == ConnStatus.CONNECTED and self.conn:
-            byte = self.conn.read()
-            if not byte:
-                continue
-            self.data_queue.put(byte.decode())
-
-    def disconnect(self) -> None:
-        if self.conn and self.status:
-            self.thread = None
-            self.conn.close()
-            self.conn = None
-            self.status = ConnStatus.DISCONNECTED
-
-    def send(self, data: str) -> None:
-        if self.conn and self.conn.is_open:
-            self.conn.write(data.encode() + b'\n')
-
-        print(f'-- [I] [Camera] --> [{self.name}] {data}')
-
-    def recv(self) -> str:
-        try:
-            data = self.data_queue.get(True, 10)
-
-            if not data:
-                return ''
-
-            data = data.strip()
-            print(f'-- [I] [Camera] <-- [{self.name}] {data}')
-            return data
-        except queue.Empty:
-            return ''
-
-
-# endregion
+from conn import SerialConn, SocketConn
 
 
 class DobotErrorCode:
@@ -123,10 +27,11 @@ class DobotErrorCode:
 
 
 class Dobot:
-    def __init__(self, address, isSerial: bool = False, name='Dobot'):
+    def __init__(self, address, isSerial: bool = False, name='Dobot', handle=print):
         self.address = address
         self.name = name
         self.conn = SerialConn(name) if isSerial else SocketConn()
+        self.handle = handle
         self.isDebug = False
 
     # core functions used to communicate with Dobot
@@ -235,20 +140,20 @@ class Dobot:
 
     def info(self, msg: str, supply='') -> None:
         supply = f'{supply or self.name}'
-        print(f'-- [I] [{supply:^18}] {msg}')
+        self.handle(f'-- [I] [{supply:^18}] {msg}')
 
     def debug(self, msg: str, supply='') -> None:
         if self.isDebug:
             supply = f'{supply or self.name}'
-            print(f'-- [D] [{supply:^18}] {msg}')
+            self.handle(f'-- [D] [{supply:^18}] {msg}')
 
     def warning(self, msg: str, supply='') -> None:
         supply = f'{supply or self.name}'
-        print(f'-- [W] [{supply:^18}] {msg}')
+        self.handle(f'-- [W] [{supply:^18}] {msg}')
 
     def error(self, msg: str, supply='') -> None:
         supply = f'{supply or self.name}'
-        print(f'-- [E] [{supply:^18}] {msg}')
+        self.handle(f'-- [E] [{supply:^18}] {msg}')
 
     def connect(self) -> None:
         if not self.conn:

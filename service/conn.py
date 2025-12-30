@@ -38,11 +38,12 @@ class SocketConn:
         return ''
 
 
-
 class SerialConn:
-    def __init__(self):
+    def __init__(self, name, handle=print):
+        self.name = name
         self.conn = None
         self.thread = None
+        self.handle = handle
         self.data_queue = queue.Queue()
         self.status = ConnStatus.DISCONNECTED
 
@@ -77,9 +78,18 @@ class SerialConn:
         if self.conn and self.conn.is_open:
             self.conn.write(data.encode() + b'\n')
 
+        self.handle(f'-- [I] [Camera] --> [{self.name}] {data}')
+
     def recv(self) -> str:
         try:
-            return self.data_queue.get(True, 10)
+            data = self.data_queue.get(True, 10)
+
+            if not data:
+                return ''
+
+            data = data.strip()
+            self.handle(f'-- [I] [Camera] <-- [{self.name}] {data}')
+            return data
         except queue.Empty:
             return ''
 

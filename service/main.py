@@ -6,6 +6,9 @@ touch = touchscreen.TouchScreen()
 MAIX_CAM_WIDTH = disp.width()
 MAIX_CAM_HEIGHT = disp.height()
 
+GRID_WIDTH = MAIX_CAM_WIDTH // 4
+GRID_HEIGHT = MAIX_CAM_HEIGHT // 4
+
 screen = image.Image(MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT)
 
 # run `scp /path/to/MapleMono-Regular.ttf root@10.177.150.1:~/fonts` to upload font file
@@ -18,7 +21,6 @@ current_state = 'INITING'
 last_x = 0
 last_y = 0
 last_pressed = 0
-is_in_pressed = 0
 
 # +-------------+
 # | btn1 | btn2 |
@@ -35,6 +37,13 @@ btn_lt_pos = [0, 0, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
 btn_rt_pos = [MAIX_CAM_WIDTH // 2, 0, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
 btn_lb_pos = [0, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
 btn_rb_pos = [MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2, MAIX_CAM_WIDTH // 2, MAIX_CAM_HEIGHT // 2]
+
+# +---+-------+---+
+# | <<|       | OK|
+# | 1 | 2 | 3 | 4 |
+# | 5 | 6 | 7 | 8 |
+# | 9 | 0 | . |DEL|
+# +---+-------+---+
 
 btn_back_pos = [0, 0, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
 btn_ok_pos = [MAIX_CAM_WIDTH * 3 // 4, 0, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4]
@@ -60,49 +69,61 @@ def init_btns(scale=2):
 
 
 def init_input_btns(scale=2):
-    box_width = MAIX_CAM_WIDTH // 4
-    box_height = MAIX_CAM_HEIGHT // 4
+    draw_centered_text('<<', scale=scale, offset_x=-GRID_WIDTH * 3 // 2, offset_y=-GRID_HEIGHT * 3 // 2)
+    draw_centered_text('OK', scale=scale, offset_x=GRID_WIDTH * 3 // 2, offset_y=-GRID_HEIGHT * 3 // 2)
 
-    draw_centered_text('<<', scale=scale, offset_x=-box_width * 3 // 2, offset_y=-box_height * 3 // 2)
-    draw_centered_text('OK', scale=scale, offset_x=box_width * 3 // 2, offset_y=-box_height * 3 // 2)
+    draw_centered_text(input_ph_str or 'Input..', scale=scale, offset_y=-GRID_HEIGHT * 3 // 2)
 
-    draw_centered_text(input_ph_str or 'Input..', scale=scale, offset_y=-box_height * 3 // 2)
-
-    draw_centered_text('1', scale=scale, offset_x=-box_width * 3 // 2, offset_y=-box_height // 2)
-    draw_centered_text('2', scale=scale, offset_x=-box_width // 2, offset_y=-box_height // 2)
-    draw_centered_text('3', scale=scale, offset_x=box_width // 2, offset_y=-box_height // 2)
-    draw_centered_text('4', scale=scale, offset_x=box_width * 3 // 2, offset_y=-box_height // 2)
-    draw_centered_text('5', scale=scale, offset_x=-box_width * 3 // 2, offset_y=box_height // 2)
-    draw_centered_text('6', scale=scale, offset_x=-box_width // 2, offset_y=box_height // 2)
-    draw_centered_text('7', scale=scale, offset_x=box_width // 2, offset_y=box_height // 2)
-    draw_centered_text('8', scale=scale, offset_x=box_width * 3 // 2, offset_y=box_height // 2)
-    draw_centered_text('9', scale=scale, offset_x=-box_width * 3 // 2, offset_y=box_height * 3 // 2)
-    draw_centered_text('0', scale=scale, offset_x=-box_width // 2, offset_y=box_height * 3 // 2)
-    draw_centered_text('·', scale=scale, offset_x=box_width // 2, offset_y=box_height * 3 // 2)
-    draw_centered_text('DEL', scale=scale, offset_x=box_width * 3 // 2, offset_y=box_height * 3 // 2)
+    draw_centered_text('1', scale=scale, offset_x=-GRID_WIDTH * 3 // 2, offset_y=-GRID_HEIGHT // 2)
+    draw_centered_text('2', scale=scale, offset_x=-GRID_WIDTH // 2, offset_y=-GRID_HEIGHT // 2)
+    draw_centered_text('3', scale=scale, offset_x=GRID_WIDTH // 2, offset_y=-GRID_HEIGHT // 2)
+    draw_centered_text('4', scale=scale, offset_x=GRID_WIDTH * 3 // 2, offset_y=-GRID_HEIGHT // 2)
+    draw_centered_text('5', scale=scale, offset_x=-GRID_WIDTH * 3 // 2, offset_y=GRID_HEIGHT // 2)
+    draw_centered_text('6', scale=scale, offset_x=-GRID_WIDTH // 2, offset_y=GRID_HEIGHT // 2)
+    draw_centered_text('7', scale=scale, offset_x=GRID_WIDTH // 2, offset_y=GRID_HEIGHT // 2)
+    draw_centered_text('8', scale=scale, offset_x=GRID_WIDTH * 3 // 2, offset_y=GRID_HEIGHT // 2)
+    draw_centered_text('9', scale=scale, offset_x=-GRID_WIDTH * 3 // 2, offset_y=GRID_HEIGHT * 3 // 2)
+    draw_centered_text('0', scale=scale, offset_x=-GRID_WIDTH // 2, offset_y=GRID_HEIGHT * 3 // 2)
+    draw_centered_text('·', scale=scale, offset_x=GRID_WIDTH // 2, offset_y=GRID_HEIGHT * 3 // 2)
+    draw_centered_text('DEL', scale=scale, offset_x=GRID_WIDTH * 3 // 2, offset_y=GRID_HEIGHT * 3 // 2)
 
 
 def is_in_btn(x, y, btn_pos):
     return x >= btn_pos[0] and x <= btn_pos[0] + btn_pos[2] and y >= btn_pos[1] and y <= btn_pos[1] + btn_pos[3]
 
 
-def on_clicked(x, y):
+def on_clicked(x, y, scale=2):
     global current_state
 
     if is_in_btn(x, y, btn_lt_pos):
+        screen.draw_rect(*btn_lt_pos, image.COLOR_GRAY, -1)
+        draw_centered_text(btn_lt_label, image.COLOR_BLACK, scale, -MAIX_CAM_WIDTH // 4, -MAIX_CAM_HEIGHT // 4)
+        time.sleep(0.1)
+
         if btn_lt_label == 'RUN':
             screen.clear()
             init_input_btns()
             current_state = 'INPUT'
-            time.sleep(0.5)
 
     elif is_in_btn(x, y, btn_rt_pos):
+        screen.draw_rect(*btn_rt_pos, image.COLOR_GRAY, -1)
+        draw_centered_text(btn_rt_label, image.COLOR_BLACK, scale, MAIX_CAM_WIDTH // 4, -MAIX_CAM_HEIGHT // 4)
+        time.sleep(0.1)
+
         pass
 
     elif is_in_btn(x, y, btn_lb_pos):
+        screen.draw_rect(*btn_lb_pos, image.COLOR_GRAY, -1)
+        draw_centered_text(btn_lb_label, image.COLOR_BLACK, scale, -MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4)
+        time.sleep(0.1)
+
         pass
 
     elif is_in_btn(x, y, btn_rb_pos):
+        screen.draw_rect(*btn_rb_pos, image.COLOR_GRAY, -1)
+        draw_centered_text(btn_rb_label, image.COLOR_BLACK, scale, MAIX_CAM_WIDTH // 4, MAIX_CAM_HEIGHT // 4)
+        time.sleep(0.1)
+
         if btn_rb_label == 'EXIT':
             app.set_exit_flag(True)
 
@@ -111,41 +132,83 @@ def on_input_clicked(x, y):
     global current_state, input_ph_str
 
     if is_in_btn(x, y, btn_back_pos):
+        screen.draw_rect(*btn_back_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('<<', image.COLOR_BLACK, 2, -GRID_WIDTH * 3 // 2, -GRID_HEIGHT * 3 // 2)
+        time.sleep(0.1)
+
         screen.clear()
         init_btns()
         input_ph_str = ''
         current_state = 'INITED'
-        time.sleep(0.5)
         return
 
     elif is_in_btn(x, y, btn_ok_pos):
+        screen.draw_rect(*btn_ok_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('OK', image.COLOR_BLACK, 2, GRID_WIDTH * 3 // 2, -GRID_HEIGHT * 3 // 2)
+        time.sleep(0.1)
         pass
 
     elif is_in_btn(x, y, btn_1_pos):
         input_ph_str += '1'
+        screen.draw_rect(*btn_1_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('1', image.COLOR_BLACK, 2, -GRID_WIDTH * 3 // 2, -GRID_HEIGHT // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_2_pos):
         input_ph_str += '2'
+        screen.draw_rect(*btn_2_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('2', image.COLOR_BLACK, 2, -GRID_WIDTH // 2, -GRID_HEIGHT // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_3_pos):
         input_ph_str += '3'
+        screen.draw_rect(*btn_3_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('3', image.COLOR_BLACK, 2, GRID_WIDTH // 2, -GRID_HEIGHT // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_4_pos):
         input_ph_str += '4'
+        screen.draw_rect(*btn_4_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('4', image.COLOR_BLACK, 2, GRID_WIDTH * 3 // 2, -GRID_HEIGHT // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_5_pos):
         input_ph_str += '5'
+        screen.draw_rect(*btn_5_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('5', image.COLOR_BLACK, 2, -GRID_WIDTH * 3 // 2, GRID_HEIGHT // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_6_pos):
         input_ph_str += '6'
+        screen.draw_rect(*btn_6_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('6', image.COLOR_BLACK, 2, -GRID_WIDTH // 2, GRID_HEIGHT // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_7_pos):
         input_ph_str += '7'
+        screen.draw_rect(*btn_7_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('7', image.COLOR_BLACK, 2, GRID_WIDTH // 2, GRID_HEIGHT // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_8_pos):
         input_ph_str += '8'
+        screen.draw_rect(*btn_8_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('8', image.COLOR_BLACK, 2, GRID_WIDTH * 3 // 2, GRID_HEIGHT // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_9_pos):
         input_ph_str += '9'
+        screen.draw_rect(*btn_9_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('9', image.COLOR_BLACK, 2, -GRID_WIDTH * 3 // 2, GRID_HEIGHT * 3 // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_0_pos):
         input_ph_str += '0'
+        screen.draw_rect(*btn_0_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('0', image.COLOR_BLACK, 2, -GRID_WIDTH // 2, GRID_HEIGHT * 3 // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_dot_pos):
         input_ph_str += '.'
+        screen.draw_rect(*btn_dot_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('·', image.COLOR_BLACK, 2, GRID_WIDTH // 2, GRID_HEIGHT * 3 // 2)
+        time.sleep(0.1)
     elif is_in_btn(x, y, btn_del_pos):
         if len(input_ph_str) > 0:
             input_ph_str = input_ph_str[:-1]
+        screen.draw_rect(*btn_del_pos, image.COLOR_GRAY, -1)
+        draw_centered_text('DEL', image.COLOR_BLACK, 2, GRID_WIDTH * 3 // 2, GRID_HEIGHT * 3 // 2)
+        time.sleep(0.1)
 
     if len(input_ph_str) <= 4:
         screen.draw_rect(0, 0, MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT * 3 // 4, image.COLOR_BLACK, -1)
@@ -203,14 +266,11 @@ def draw_centered_rect(
 if __name__ == '__main__':
     draw_centered_text('Touch to start!', scale=1.5)
 
-    # count = 0
-
     while not app.need_exit():
         x, y, pressed = touch.read()
 
         if pressed and not last_pressed:
             last_pressed = pressed
-            print(f'clicked at: {x}, {y}')
             match current_state:
                 case 'INITING':
                     screen.clear()
@@ -223,8 +283,5 @@ if __name__ == '__main__':
                     on_input_clicked(x, y)
         elif not pressed:
             last_pressed = pressed
-
-        # if count == 20:
-        #     app.set_exit_flag(True)
 
         disp.show(screen)
