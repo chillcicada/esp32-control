@@ -13,7 +13,12 @@ image.load_font('Maple Mono', '/root/fonts/MapleMono-Regular.ttf', 40)
 image.set_default_font('Maple Mono')
 
 input_ph_str = ''
-current_state = 'INIT'
+current_state = 'INITING'
+
+last_x = 0
+last_y = 0
+last_pressed = 0
+is_in_pressed = 0
 
 # +-------------+
 # | btn1 | btn2 |
@@ -58,10 +63,10 @@ def init_input_btns(scale=2):
     box_width = MAIX_CAM_WIDTH // 4
     box_height = MAIX_CAM_HEIGHT // 4
 
-    draw_centered_text('BACK', scale=scale, offset_x=-box_width * 3 // 2, offset_y=-box_height * 3 // 2)
+    draw_centered_text('<<', scale=scale, offset_x=-box_width * 3 // 2, offset_y=-box_height * 3 // 2)
     draw_centered_text('OK', scale=scale, offset_x=box_width * 3 // 2, offset_y=-box_height * 3 // 2)
 
-    draw_centered_text(input_ph_str or 'Input pH...', image.COLOR_WHITE, scale=scale, offset_y=-box_height * 3 // 2)
+    draw_centered_text(input_ph_str or 'Input..', scale=scale, offset_y=-box_height * 3 // 2)
 
     draw_centered_text('1', scale=scale, offset_x=-box_width * 3 // 2, offset_y=-box_height // 2)
     draw_centered_text('2', scale=scale, offset_x=-box_width // 2, offset_y=-box_height // 2)
@@ -82,32 +87,44 @@ def is_in_btn(x, y, btn_pos):
 
 
 def on_clicked(x, y):
-    global current_state
-    if current_state == 'INIT':
-        if is_in_btn(x, y, btn_lt_pos):
-            if btn_lt_label == 'RUN':
-                screen.clear()
-                init_input_btns()
-                current_state = 'INPUT'
+    global current_state, is_in_pressed
+    if not is_in_pressed:
+        return
 
-        elif is_in_btn(x, y, btn_rt_pos):
-            pass
+    is_in_pressed = 0
 
-        elif is_in_btn(x, y, btn_lb_pos):
-            pass
+    if is_in_btn(x, y, btn_lt_pos):
+        if btn_lt_label == 'RUN':
+            screen.clear()
+            init_input_btns()
+            current_state = 'INPUT'
+            time.sleep(0.5)
 
-        elif is_in_btn(x, y, btn_rb_pos):
-            if btn_rb_label == 'EXIT':
-                app.set_exit_flag(True)
+    elif is_in_btn(x, y, btn_rt_pos):
+        pass
+
+    elif is_in_btn(x, y, btn_lb_pos):
+        pass
+
+    elif is_in_btn(x, y, btn_rb_pos):
+        if btn_rb_label == 'EXIT':
+            app.set_exit_flag(True)
 
 
 def on_input_clicked(x, y):
-    global current_state, input_ph_str
+    global current_state, is_in_pressed, input_ph_str
+    if not is_in_pressed:
+        return
+
+    is_in_pressed = 0
+
     if is_in_btn(x, y, btn_back_pos):
         screen.clear()
         init_btns()
         input_ph_str = ''
-        current_state = 'INIT'
+        current_state = 'INITED'
+        time.sleep(0.5)
+        return
 
     elif is_in_btn(x, y, btn_ok_pos):
         pass
@@ -139,7 +156,7 @@ def on_input_clicked(x, y):
             input_ph_str = input_ph_str[:-1]
 
     if len(input_ph_str) <= 4:
-        screen.clear()
+        screen.draw_rect(0, 0, MAIX_CAM_WIDTH, MAIX_CAM_HEIGHT * 3 // 4, image.COLOR_BLACK, -1)
         init_input_btns()
     else:
         pass
@@ -194,24 +211,12 @@ def draw_centered_rect(
 if __name__ == '__main__':
     draw_centered_text('Touch to start!', scale=1.5)
 
-    last_x = 0
-    last_y = 0
-    last_pressed = 0
-    is_in_pressed = 0
-
     # count = 0
 
     while not app.need_exit():
         x, y, pressed = touch.read()
 
         if pressed != last_pressed:
-            screen.clear()
-
-            match current_state:
-                case 'INIT':
-                    init_btns()
-                    time.sleep(0.1)
-
             # screen.clear()
             # draw_centered_text('pH: 7.81', scale=3, color=image.COLOR_BLACK, box_thickness=-1, offset_y=-100)
             # draw_centered_text('pH: 5.81', scale=3, offset_y=100)
@@ -224,12 +229,17 @@ if __name__ == '__main__':
         if pressed:
             is_in_pressed = 1
         elif is_in_pressed:
+            print(f'clicked at: {x}, {y}')
             match current_state:
-                case 'INIT':
+                case 'INITING':
+                    screen.clear()
+                    init_btns()
+                    current_state = 'INITED'
+                    time.sleep(0.5)
+                case 'INITED':
                     on_clicked(x, y)
                 case 'INPUT':
                     on_input_clicked(x, y)
-            is_in_pressed = 0
 
         # if count == 20:
         #     app.set_exit_flag(True)
