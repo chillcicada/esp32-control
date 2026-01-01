@@ -1,7 +1,102 @@
 from functools import wraps
 from inspect import signature
 
-from conn import SerialConn, SocketConn
+# from conn import SerialConn, SocketConn
+import queue
+import socket
+import threading
+
+from maix import uart
+
+
+class ConnStatus:
+    CONNECTED = True
+    DISCONNECTED = False
+
+
+class SocketConn:
+    def __init__(self):
+        self.conn = None
+        self.status = ConnStatus.DISCONNECTED
+
+    def connect(self, address) -> None:
+        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.conn.connect(address)
+
+        if self.conn:
+            self.status = ConnStatus.CONNECTED
+
+    def disconnect(self) -> None:
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+            self.status = ConnStatus.DISCONNECTED
+
+    def send(self, data: str) -> None:
+        if self.conn:
+            self.conn.sendall(data.encode() + b'\n')
+
+    def recv(self, buffer_size=1024) -> str:
+        if self.conn:
+            return self.conn.recv(buffer_size).decode()
+        return ''
+
+
+class SerialConn:
+    def __init__(self, name, handle=print):
+        self.name = name
+        self.conn = None
+        self.thread = None
+        self.handle = handle
+        self.data_queue = queue.Queue()
+        self.status = ConnStatus.DISCONNECTED
+
+    def connect(self, address) -> None:
+        # here we can use the uart module from maix,
+        # but for universality, we use serial module
+
+        self.conn = uart.UART(port=address, baudrate=115200)
+
+        if not (self.conn and self.conn.is_open):
+            raise ConnectionError(f'Failed to open serial port: {address}')
+
+        self.status = ConnStatus.CONNECTED
+        self.thread = threading.Thread(target=self._read_loop, daemon=True)
+        self.thread.start()
+
+    def _read_loop(self):
+        while self.status == ConnStatus.CONNECTED and self.conn:
+            byte = self.conn.read()
+            if not byte:
+                continue
+            self.data_queue.put(byte.decode())
+
+    def disconnect(self) -> None:
+        if self.conn and self.status:
+            self.thread = None
+            self.conn.close()
+            self.conn = None
+            self.status = ConnStatus.DISCONNECTED
+
+    def send(self, data: str) -> None:
+        if self.conn and self.conn.is_open:
+            self.conn.write(data.encode() + b'\n')
+
+        self.handle(f'-- [I] [Camera] --> [{self.name}] {data}')
+
+    def recv(self) -> str:
+        try:
+            data = self.data_queue.get(True, 10)
+
+            if not data:
+                return ''
+
+            data = data.strip()
+            self.handle(f'-- [I] [Camera] <-- [{self.name}] {data}')
+            return data
+        except queue.Empty:
+            return ''
+
 
 
 class DobotErrorCode:
@@ -1014,14 +1109,14 @@ if __name__ == '__main__':
 
     INIT_PH = 7.0
 
-    esp.send('START')
-    handle = esp.recv()
+    # esp.send('START')
+    # handle = esp.recv()
 
-    if handle == 'READY':
-        dobot.info(f'{esp.name} ready', esp.name)
-    else:
-        dobot.warning(f'Not recv from {esp.name}', esp.name)
-        raise ConnectionError('ESP32 is not prepared.')
+    # if handle == 'READY':
+    #     dobot.info(f'{esp.name} ready', esp.name)
+    # else:
+    #     dobot.warning(f'Not recv from {esp.name}', esp.name)
+    #     raise ConnectionError('ESP32 is not prepared.')
 
     # define the positions
     station_1 = [-170, -30, -90, -60, -80, 0]
@@ -1037,6 +1132,13 @@ if __name__ == '__main__':
 
     dobot.SpeedFactor(40)
     dobot.Grab(False)
+
+    dobot.Pack()
+    time.sleep(4)
+
+    # dobot.DisableRobot()
+
+    dobot.disconnect()
 
     dobot.MovJJoint(position_2)
     time.sleep(2)
@@ -1094,7 +1196,7 @@ if __name__ == '__main__':
     time.sleep(3)
 
     dobot.Grab(False)
-    dobot.MovLJoint(position_2)
+    dobot.RelMovLTool(0, 80, 0, 0, 0, 0)
     time.sleep(1)
 
     dobot.MovJJoint(station_2)
@@ -1125,7 +1227,7 @@ if __name__ == '__main__':
     dobot.MovLJoint(station_1)
     time.sleep(1)
 
-    _counter = 5
+    _counter = 4
     while _counter <= 5:
         _counter += 1
 
@@ -1143,13 +1245,16 @@ if __name__ == '__main__':
         if handle == 'STEPPER_START':
             dobot.info('Start', 'Stepper Moter')
 
-            esp.send(f'SET_STEPPER:{STEPPER_DOWN_RPM},4000,DOWN')
+            esp.send(f'SET_STEPPER:{STEPPER_DOWN_RPM},2000,DOWN')
 
             while True:
                 handle = esp.recv()
                 if handle.startswith('STEPPER_CONFIGURED'):
                     configured_params = handle.split(':', 1)[1]
                     dobot.info(f'Stepper configured: {configured_params}', 'Stepper Moter')
+                elif handle.startswith('PH_'):
+                    ph_value = handle.split(':', 1)[1]
+                    dobot.info(f'Current pH value: {ph_value}', 'Stepper Moter')
                 elif handle == 'STEPPER_CONFIG_INVALID' or handle == 'STEPPER_RECV_INVALID':
                     dobot.warning('Stepper configuration invalid', 'Stepper Moter')
                 elif handle == 'STEPPER_DONE':

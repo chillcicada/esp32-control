@@ -95,7 +95,7 @@ class SerialConn:
 
 
 if __name__ == '__main__':
-    serial_conn = SerialConn()
+    serial_conn = SerialConn('uart0')
     print('stage 1')
     serial_conn.connect('/dev/ttyS0')
     print('stage 2')
